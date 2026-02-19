@@ -11,6 +11,8 @@
 - **系统提示词**：支持自定义系统提示词，可保存为模板
 - **消息编辑**：支持修改和删除对话消息
 - **取消生成**：生成过程中可随时点击停止按钮取消生成
+- **对话分享**：支持生成分享链接，可分享对话内容给他人
+- **上下文限制**：自动限制为最近10轮对话，减少token消耗
 
 ### 模型管理
 - 支持多种模型提供商：OpenAI、Anthropic、Google、智谱AI、阿里云、硅基流动等
@@ -27,12 +29,14 @@
 - 消息复制、重新生成、修改、删除
 - 侧边栏隐藏/展开
 - 输入框智能聚焦：生成完成后自动聚焦输入框
+- 刷新页面保持当前对话和历史记录
 
 ## 技术栈
 
 - **框架**: React 18 + TypeScript
 - **桌面应用**: Electron
 - **后端服务**: Express + Node.js
+- **数据库**: PostgreSQL 16 (Docker)
 - **构建工具**: Vite
 - **样式**: TailwindCSS
 - **状态管理**: Zustand
@@ -46,6 +50,12 @@
 ```bash
 npm install
 ```
+
+### 启动 PostgreSQL 数据库
+```bash
+npm run db:start
+```
+首次启动会自动创建数据库表结构。详细使用方法请查看 [PostgreSQL 数据库使用指南](docs/database.md)。
 
 ### Web 开发模式
 ```bash
@@ -98,6 +108,7 @@ npm run electron:build:win   # Windows
 - **修改消息**：点击用户消息下方的修改按钮，可以重新编辑问题并重新生成回答
 - **删除消息**：点击用户消息下方的删除按钮，删除该问题及对应的回答
 - **取消生成**：生成过程中点击红色"停止"按钮可取消当前生成
+- **分享对话**：点击右上角分享按钮，选择要分享的消息，生成链接后可分享给他人
 
 ### 5. 侧边栏操作
 - 点击侧边栏顶部的隐藏按钮可以收起侧边栏
@@ -130,6 +141,9 @@ ModelComparePlatform/
 │   │   │   ├── SettingsModal.tsx    # 设置弹窗
 │   │   │   ├── ModelConfigForm.tsx  # 模型配置表单
 │   │   │   └── SystemPromptEditor.tsx # 系统提示词编辑器
+│   │   ├── share/                # 分享功能组件
+│   │   │   ├── ShareModal.tsx      # 分享弹窗
+│   │   │   └── ShareView.tsx      # 分享页面视图
 │   │   └── common/               # 通用组件
 │   │       ├── Button.tsx
 │   │       ├── Modal.tsx
@@ -160,7 +174,12 @@ ModelComparePlatform/
 │   └── preload.cjs               # 预加载脚本
 ├── config/                       # 配置文件目录（gitignored）
 │   └── models.json               # 模型配置文件
+├── docs/                         # 文档目录
+│   └── database.md               # PostgreSQL 数据库使用指南
 ├── server.cjs                    # Express 后端服务
+├── docker-compose.yml            # PostgreSQL Docker 配置
+├── init.sql                      # 数据库初始化脚本
+├── .env.example                  # 环境变量示例
 ├── package.json                  # 项目配置
 ├── vite.config.ts                # Vite 配置
 ├── tailwind.config.js            # TailwindCSS 配置
@@ -170,36 +189,32 @@ ModelComparePlatform/
 
 ## 数据持久化
 
-### 配置同步机制
+### 数据库存储
+
+本项目使用 **PostgreSQL** 数据库存储对话历史和模型配置，实现多端数据同步。
+
+- 详细使用方法请查看 [PostgreSQL 数据库使用指南](docs/database.md)
+- 数据库管理命令：
+  - `npm run db:start` - 启动数据库
+  - `npm run db:stop` - 停止数据库
+  - `npm run db:reset` - 重置数据库
+
+### 数据同步机制
+
 项目采用三层数据存储策略：
 
-1. **后端 API 服务**（优先级最高）
-   - 启动后端服务后，所有模型配置通过 API 同步
-   - 配置文件位置：`项目目录/config/models.json`
-   - 桌面端和 Web 端共享同一配置文件
+1. **PostgreSQL 数据库**（优先级最高）
+   - 后端服务连接成功后使用
+   - 支持多端数据实时同步
+   - 数据持久化存储
 
-2. **Electron 本地文件**（备用）
-   - 当后端不可用时，桌面端直接读写本地文件
-   - 文件位置：`项目目录/config/models.json`
+2. **本地文件存储**（备用）
+   - 当数据库不可用时自动降级
+   - 配置文件位置：`config/models.json`
 
 3. **浏览器 localStorage**（降级）
-   - 当后端和本地文件都不可用时使用
-   - 存储对话历史、用户设置等
-
-### 启动方式与数据同步
-
-**Web 单独模式** (`npm run dev`):
-- 仅使用 localStorage
-- 数据不与其他端同步
-
-**后端 + Web 模式** (`npm run dev:all`):
-- 模型配置通过后端 API 同步到 `config/models.json`
-- Web 端和桌面端共享配置
-
-**桌面端模式** (`npm run electron:dev`):
-- 自动启动后端服务
-- 支持本地文件直接读写
-- 完整的配置同步能力
+   - 当后端服务不可用时使用
+   - 仅本地临时存储
 
 ## 注意事项
 

@@ -94,10 +94,12 @@ export class StreamingManager {
 // 单例实例
 export const streamingManager = new StreamingManager();
 
-// 辅助函数：构建消息历史
+const MAX_CONTEXT_ROUNDS = 10;
+
 export function buildMessageHistory(
   messages: Message[],
-  systemPrompt: string
+  systemPrompt: string,
+  maxRounds: number = MAX_CONTEXT_ROUNDS
 ): { role: 'system' | 'user' | 'assistant'; content: string }[] {
   const result: { role: 'system' | 'user' | 'assistant'; content: string }[] = [];
   
@@ -105,7 +107,25 @@ export function buildMessageHistory(
     result.push({ role: 'system', content: systemPrompt });
   }
   
-  for (const msg of messages) {
+  // 一轮对话 = 一条用户消息 + 一条AI回复
+  // 从后往前找最近 maxRounds 条用户消息的位置，即最近 maxRounds 轮对话
+  let userCount = 0;
+  let startIndex = 0;
+  
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      userCount++;
+      if (userCount >= maxRounds) {
+        startIndex = i;
+        break;
+      }
+    }
+  }
+  
+  // 只取 startIndex 之后的消息作为上下文（约 maxRounds * 2 条消息）
+  const contextMessages = messages.slice(startIndex);
+  
+  for (const msg of contextMessages) {
     if (msg.role !== 'system') {
       result.push({
         role: msg.role,
