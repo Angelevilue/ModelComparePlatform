@@ -94,10 +94,11 @@ const defaultPresets: ProviderPreset[] = [
 
 const defaultMCPServers: MCPServerConfig[] = [
   {
-    id: 'modelscope-fetch',
-    name: 'ModelScope Fetch',
-    url: 'https://modelscope.cn/mcp/servers/@modelcontextprotocol/fetch',
+    id: 'minimax-coding-plan',
+    name: 'MiniMax Coding Plan',
+    url: '本地命令行服务 (uvx)',
     isEnabled: false,
+    authToken: 'sk-cp-ZxKohMTlJKRZs_XbAASpCazyada2BrhbhNPHVoDnfcw938JQvJU5nL3px9m0QAAXMIq3Zg715cfYN6deAx3iytDyGC924SMxLGRvJbWeUNjfR8dl0f6rVag',
   },
 ];
 

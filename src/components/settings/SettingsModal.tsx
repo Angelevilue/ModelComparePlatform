@@ -206,9 +206,10 @@ function MCPServerCard({ server, onUpdate, onDelete }: MCPServerCardProps) {
   const [isEditing, setIsEditing] = useState(!server.url);
   const [name, setName] = useState(server.name);
   const [url, setUrl] = useState(server.url);
+  const [authToken, setAuthToken] = useState(server.authToken || '');
 
   const handleSave = () => {
-    onUpdate({ name, url });
+    onUpdate({ name, url, authToken });
     setIsEditing(false);
   };
 
@@ -236,7 +237,14 @@ function MCPServerCard({ server, onUpdate, onDelete }: MCPServerCardProps) {
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="MCP 服务器 URL"
+                placeholder="MCP 服务器 URL 或命令"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              <input
+                type="password"
+                value={authToken}
+                onChange={(e) => setAuthToken(e.target.value)}
+                placeholder="API Key (可选)"
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               <div className="flex gap-2">
@@ -267,6 +275,9 @@ function MCPServerCard({ server, onUpdate, onDelete }: MCPServerCardProps) {
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-1 truncate">{server.url}</p>
+              {server.authToken && (
+                <p className="text-xs text-gray-400 mt-1">API Key: 已配置</p>
+              )}
             </div>
           )}
         </div>
