@@ -8,6 +8,7 @@ export interface Message {
   content: string;
   timestamp: number;
   modelId?: string;
+  panelIndex?: number; // 对比模式下面板的索引
   isError?: boolean;
   isStreaming?: boolean;
 }

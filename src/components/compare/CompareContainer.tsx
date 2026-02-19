@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { ComparePanel } from './ComparePanel';
 import { ChatInput } from '../chat/ChatInput';
 import { SystemPromptEditor } from '../settings/SystemPromptEditor';
@@ -16,7 +16,6 @@ interface CompareContainerProps {
   onOpenSettings: () => void;
 }
 
-// 最大对比数
 const MAX_COMPARE_COUNT = 4;
 
 export function CompareContainer({ conversationId, onOpenSettings }: CompareContainerProps) {
@@ -35,9 +34,21 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
   const conversation = getConversationById(conversationId);
   const [systemPrompt, setSystemPrompt] = useState(conversation?.systemPrompt || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const currentMessageIdsRef = useRef<string[]>([]);
   
-  // 当前选中的模型配置
   const [panelModels, setPanelModels] = useState<(ModelConfig | undefined)[]>([]);
+
+  const handleCancel = useCallback(() => {
+    streamingManager.cancelConversation(conversationId);
+    for (const messageId of currentMessageIdsRef.current) {
+      updateMessage(conversationId, messageId, {
+        isStreaming: false,
+      });
+    }
+    setIsGenerating(false);
+    setGenerating(false);
+    currentMessageIdsRef.current = [];
+  }, [conversationId]);
 
   // 初始化面板模型
   useEffect(() => {
@@ -128,16 +139,19 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
     // 为每个模型添加 AI 消息占位
     const messageIds: { modelId: string; messageId: string }[] = [];
     
-    for (const model of validModels) {
+    for (let i = 0; i < validModels.length; i++) {
+      const model = validModels[i];
       const messageId = addMessage(conversationId, {
         role: 'assistant',
         content: '',
         modelId: model.name,
+        panelIndex: i,
         isStreaming: true,
       });
       messageIds.push({ modelId: model.id, messageId });
     }
 
+    currentMessageIdsRef.current = messageIds.map(m => m.messageId);
     setIsGenerating(true);
     setGenerating(true);
 
@@ -299,6 +313,7 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
         <div className="max-w-4xl mx-auto">
           <ChatInput
             onSend={handleSend}
+            onCancel={handleCancel}
             isLoading={isGenerating}
             placeholder={
               panelModels.some(Boolean) 

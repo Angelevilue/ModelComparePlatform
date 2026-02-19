@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { ModelSelector } from './ModelSelector';
@@ -32,6 +32,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
   const conversation = getConversationById(conversationId);
   const [systemPrompt, setSystemPrompt] = useState(conversation?.systemPrompt || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const currentMessageIdRef = useRef<string | null>(null);
 
   if (!conversation) {
     return (
@@ -45,6 +46,18 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
   const modelConfig = getConfigById(selectedModelId);
   const hasMessages = conversation.messages.length > 0;
   const isInputAtCenter = !hasMessages && !isGenerating;
+
+  const handleCancel = useCallback(() => {
+    if (currentMessageIdRef.current) {
+      streamingManager.cancel(conversationId, currentMessageIdRef.current);
+      updateMessage(conversationId, currentMessageIdRef.current, {
+        isStreaming: false,
+      });
+      setIsGenerating(false);
+      setGenerating(false);
+      currentMessageIdRef.current = null;
+    }
+  }, [conversationId]);
 
   const handleSend = useCallback(async (content: string, attachments: Attachment[] = []) => {
     if (!modelConfig || !selectedModelId) return;
@@ -69,6 +82,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
       isStreaming: true,
     });
 
+    currentMessageIdRef.current = assistantMessageId;
     setIsGenerating(true);
     setGenerating(true);
 
@@ -381,11 +395,13 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         <div className={`${isInputAtCenter ? 'w-full max-w-2xl mx-auto' : 'max-w-3xl mx-auto w-full'}`}>
           <ChatInput
             onSend={handleSend}
+            onCancel={handleCancel}
             isLoading={isGenerating}
             placeholder={modelConfig ? '输入消息，或上传文件...' : '请先选择或配置模型'}
             disabled={!modelConfig}
             modelName={modelConfig?.name}
             showModelInfo={true}
+            autoFocus={hasMessages || isGenerating}
             onSelectAgent={(agentPrompt) => {
               setSystemPrompt(agentPrompt);
             }}
