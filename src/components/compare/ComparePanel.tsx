@@ -1,0 +1,123 @@
+import { useRef, useEffect, useMemo } from 'react';
+import { MessageBubble } from '../chat/MessageBubble';
+import { ModelSelector } from '../chat/ModelSelector';
+import { cn } from '@/utils/helpers';
+import type { Message, ModelConfig } from '@/types';
+import { X, Settings } from 'lucide-react';
+
+interface ComparePanelProps {
+  modelConfig?: ModelConfig;
+  messages: Message[];
+  onModelChange?: (modelId: string) => void;
+  onRemove?: () => void;
+  canRemove?: boolean;
+  isGenerating?: boolean;
+  className?: string;
+  panelIndex: number; // 面板索引
+}
+
+export function ComparePanel({
+  modelConfig,
+  messages,
+  onModelChange,
+  onRemove,
+  canRemove = true,
+  isGenerating = false,
+  className,
+  panelIndex: _panelIndex,
+}: ComparePanelProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 过滤消息：显示用户消息 + 当前面板模型的助手消息
+  const displayMessages = useMemo(() => {
+    if (!modelConfig) return [];
+    
+    return messages.filter((message) => {
+      // 用户消息全部显示
+      if (message.role === 'user') return true;
+      // 系统消息不显示
+      if (message.role === 'system') return false;
+      // 助手消息只显示当前模型的
+      if (message.role === 'assistant') {
+        // 通过 modelId 或消息索引来匹配
+        // 优先匹配 modelId，如果没有则通过消息顺序匹配
+        return message.modelId === modelConfig.name || message.modelId === modelConfig.id;
+      }
+      return false;
+    });
+  }, [messages, modelConfig]);
+
+  // 自动滚动到底部
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [displayMessages]);
+
+  return (
+    <div className={cn('flex flex-col h-full min-h-0 bg-white border-r border-gray-200', className)}>
+      {/* 面板头部 */}
+      <div className="flex-none flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-200">
+        {modelConfig ? (
+          <ModelSelector
+            selectedId={modelConfig.id}
+            onSelect={(id) => onModelChange?.(id)}
+          />
+        ) : (
+          <span className="text-sm text-gray-500">未选择模型</span>
+        )}
+        
+        {canRemove && onRemove && (
+          <button
+            onClick={onRemove}
+            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-2"
+            title="移除此面板"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* 消息列表 - 可滚动区域 */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 min-h-0">
+        {!modelConfig ? (
+          <div className="h-full flex items-center justify-center text-gray-400 text-sm text-center px-4">
+            <div>
+              <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+                <Settings className="w-5 h-5 text-gray-400" />
+              </div>
+              <p>请先选择模型</p>
+            </div>
+          </div>
+        ) : displayMessages.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-gray-400 text-sm text-center px-4">
+            <div>
+              <div className="w-12 h-12 mx-auto mb-3 bg-gray-100 rounded-full flex items-center justify-center">
+                <Settings className="w-5 h-5 text-gray-400" />
+              </div>
+              <p>选择模型开始对比</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {displayMessages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                showActions={false}
+                className="py-2"
+              />
+            ))}
+            {isGenerating && (
+              <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0.1s]" />
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
