@@ -10,6 +10,12 @@ import { ToastContainer, useToast } from './components/common/Toast';
 import { PanelLeft } from 'lucide-react';
 import './styles/index.css';
 
+interface ShareData {
+  title: string;
+  messages: { role: 'user' | 'assistant'; content: string; modelId?: string }[];
+  createdAt: number;
+}
+
 function App() {
   const { 
     currentConversationId, 
@@ -22,7 +28,8 @@ function App() {
   } = useChatStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-  const [showShareView, setShowShareView] = useState(false);
+  const [shareData, setShareData] = useState<ShareData | null>(null);
+  const [shareError, setShareError] = useState<string>('');
   const { toasts, removeToast } = useToast();
   
   const currentConversation = getCurrentConversation();
@@ -32,7 +39,15 @@ function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const shareParam = urlParams.get('share');
     if (shareParam) {
-      setShowShareView(true);
+      try {
+        const jsonStr = decodeURIComponent(escape(atob(shareParam)));
+        const decoded = JSON.parse(jsonStr);
+        setShareData(decoded);
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch (e) {
+        console.error('Share decode error:', e);
+        setShareError('无效的分享链接');
+      }
     }
   }, []);
 
@@ -59,8 +74,20 @@ function App() {
     return () => window.removeEventListener('error', handleError);
   }, []);
 
-  if (showShareView) {
-    return <ShareView onClose={() => setShowShareView(false)} />;
+  const handleCloseShare = () => {
+    setShareData(null);
+    setShareError('');
+    window.location.href = window.location.pathname;
+  };
+
+  if (shareData || shareError) {
+    return (
+      <ShareView 
+        shareData={shareData} 
+        error={shareError} 
+        onClose={handleCloseShare} 
+      />
+    );
   }
 
   return (

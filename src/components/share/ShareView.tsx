@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { MessageSquare, Users, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -19,32 +19,13 @@ interface ShareData {
 }
 
 interface ShareViewProps {
+  shareData: ShareData | null;
+  error: string;
   onClose: () => void;
 }
 
-export function ShareView({ onClose }: ShareViewProps) {
-  const [shareData, setShareData] = useState<ShareData | null>(null);
-  const [error, setError] = useState<string>('');
+export function ShareView({ shareData, error: initError, onClose }: ShareViewProps) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const shareParam = urlParams.get('share');
-    if (shareParam) {
-      try {
-        // 先 base64 解码，再用 decodeURIComponent 处理 Unicode
-        const jsonStr = decodeURIComponent(escape(atob(shareParam)));
-        const decoded = JSON.parse(jsonStr);
-        setShareData(decoded);
-        window.history.replaceState({}, '', window.location.pathname);
-      } catch (e) {
-        console.error('Decode error:', e);
-        setError('无效的分享链接');
-      }
-    } else {
-      setError('缺少分享参数');
-    }
-  }, []);
 
   const copyMessage = async (content: string, index: number) => {
     await navigator.clipboard.writeText(content);
@@ -52,11 +33,11 @@ export function ShareView({ onClose }: ShareViewProps) {
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  if (error) {
+  if (initError) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-red-500 mb-4">{error}</div>
+          <div className="text-red-500 mb-4">{initError}</div>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
