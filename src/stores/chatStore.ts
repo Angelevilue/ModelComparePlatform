@@ -4,9 +4,13 @@ import type { Conversation, Message, ChatState } from '@/types';
 import { generateId, generateConversationTitle } from '@/utils/helpers';
 import { apiService } from '@/services/api';
 
+const MAX_MESSAGES_LOAD = 100;
+
 interface ChatStore extends ChatState {
   isLoaded: boolean;
+  loadedConversationIds: Set<string>;
   loadConversations: () => Promise<void>;
+  loadMessages: (conversationId: string) => Promise<void>;
   createConversation: (mode?: 'single' | 'compare', compareCount?: number) => string;
   deleteConversation: (id: string) => void;
   setCurrentConversation: (id: string | null) => void;
@@ -42,6 +46,7 @@ export const useChatStore = create<ChatStore>()(
       currentConversationId: null,
       isGenerating: false,
       isLoaded: false,
+      loadedConversationIds: new Set<string>(),
 
       loadConversations: async () => {
         try {
@@ -53,6 +58,26 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
+      loadMessages: async (conversationId: string) => {
+        const { loadedConversationIds } = get();
+        if (loadedConversationIds.has(conversationId)) return;
+
+        try {
+          const messages = await apiService.getMessages(conversationId);
+          const limitedMessages = messages.slice(-MAX_MESSAGES_LOAD);
+          
+          set((state) => ({
+            conversations: state.conversations.map((c) => {
+              if (c.id !== conversationId) return c;
+              return { ...c, messages: limitedMessages };
+            }),
+            loadedConversationIds: new Set([...state.loadedConversationIds, conversationId]),
+          }));
+        } catch (error) {
+          console.error('Failed to load messages:', error);
+        }
+      },
+
       createConversation: (mode = 'single', compareCount = 1) => {
         const conversation = createEmptyConversation(mode, compareCount);
         
@@ -61,6 +86,7 @@ export const useChatStore = create<ChatStore>()(
         set((state) => ({
           conversations: [conversation, ...state.conversations],
           currentConversationId: conversation.id,
+          loadedConversationIds: new Set([...state.loadedConversationIds, conversation.id]),
         }));
         return conversation.id;
       },
@@ -70,18 +96,27 @@ export const useChatStore = create<ChatStore>()(
         
         set((state) => {
           const newConversations = state.conversations.filter((c) => c.id !== id);
+          const newLoadedIds = new Set(state.loadedConversationIds);
+          newLoadedIds.delete(id);
+          
           return {
             conversations: newConversations,
             currentConversationId:
               state.currentConversationId === id
                 ? newConversations[0]?.id || null
                 : state.currentConversationId,
+            loadedConversationIds: newLoadedIds,
           };
         });
       },
 
-      setCurrentConversation: (id) => {
+      setCurrentConversation: async (id) => {
         set({ currentConversationId: id });
+        
+        if (id) {
+          const { loadMessages } = get();
+          await loadMessages(id);
+        }
       },
 
       addMessage: (conversationId, message) => {

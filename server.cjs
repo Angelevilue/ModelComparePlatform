@@ -198,10 +198,13 @@ app.delete('/api/conversations/:id/messages', async (req, res) => {
 // 获取对话消息
 app.get('/api/conversations/:id/messages', async (req, res) => {
   const { id } = req.params;
+  const limit = parseInt(req.query.limit) || 100;
   try {
     const result = await pool.query(
-      'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at',
-      [id]
+      `SELECT * FROM (
+        SELECT * FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT $2
+      ) sub ORDER BY created_at ASC`,
+      [id, limit]
     );
     const messages = result.rows.map(row => ({
       id: row.id,

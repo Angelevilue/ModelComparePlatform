@@ -42,8 +42,8 @@ export const apiService = {
   },
 
   // ==================== 消息 ====================
-  async getMessages(conversationId: string): Promise<Message[]> {
-    const response = await axios.get(`${API_BASE}/conversations/${conversationId}/messages`);
+  async getMessages(conversationId: string, limit: number = 100): Promise<Message[]> {
+    const response = await axios.get(`${API_BASE}/conversations/${conversationId}/messages?limit=${limit}`);
     return response.data;
   },
 
