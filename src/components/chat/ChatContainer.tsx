@@ -186,8 +186,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
 
   return (
     <div className="flex-1 flex flex-col h-full bg-gray-50/50 relative">
-      {/* 顶部工具栏 - 有消息或生成中时显示 */}
-      <div className={`flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 transition-all duration-300 ${hasMessages || isGenerating ? '' : 'invisible h-0 py-0 border-none overflow-hidden'}`}>
+      {/* 顶部工具栏 */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
         <div className="flex items-center gap-3">
           <ModelSelector
             selectedId={selectedModelId}

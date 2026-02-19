@@ -5,6 +5,7 @@ import { CompareContainer } from './components/compare/CompareContainer';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { useChatStore } from './stores/chatStore';
 import { ToastContainer, useToast } from './components/common/Toast';
+import { PanelLeft } from 'lucide-react';
 import './styles/index.css';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
     conversations 
   } = useChatStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const { toasts, removeToast } = useToast();
   
   const currentConversation = getCurrentConversation();
@@ -43,10 +45,26 @@ function App() {
   return (
     <div className="flex h-screen bg-white overflow-hidden">
       {/* 侧边栏 */}
-      <Sidebar className="w-64 flex-shrink-0 hidden md:flex" />
+      {isSidebarVisible && (
+        <Sidebar 
+          className="w-64 flex-shrink-0" 
+          onCollapse={() => setIsSidebarVisible(false)} 
+        />
+      )}
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* 侧边栏展开按钮 */}
+        {!isSidebarVisible && (
+          <button
+            onClick={() => setIsSidebarVisible(true)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 bg-gray-800 text-white rounded-r-lg hover:bg-gray-700 transition-colors"
+            title="展开侧边栏"
+          >
+            <PanelLeft className="w-5 h-5" />
+          </button>
+        )}
+
         {currentConversationId ? (
           mode === 'single' ? (
             <ChatContainer
