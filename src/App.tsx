@@ -59,13 +59,20 @@ function App() {
 
   useEffect(() => {
     if (!isLoaded) return;
+    
+    // 如果当前有选中的对话，且该对话存在于列表中，保持当前对话
+    if (currentConversationId && conversations.some(c => c.id === currentConversationId)) {
+      return;
+    }
+    
+    // 否则按默认逻辑处理
     if (conversations.length === 0) {
       const newId = createConversation('single');
       setCurrentConversation(newId);
-    } else if (!currentConversationId) {
+    } else {
       setCurrentConversation(conversations[0].id);
     }
-  }, [isLoaded]);
+  }, [isLoaded, conversations.length]);
 
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
