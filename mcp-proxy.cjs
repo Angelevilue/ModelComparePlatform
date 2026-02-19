@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const { spawn } = require('child_process');
-const path = require('path');
 
 const app = express();
 const PORT = process.env.MCP_PROXY_PORT || 3002;
@@ -11,7 +10,9 @@ app.use(express.json());
 
 let mcpProcess = null;
 let mcpReady = false;
-let mcpBuffer = '';
+let pendingRequests = new Map();
+let requestId = 1;
+let initialized = false;
 
 function startMCP() {
   if (mcpProcess) return;
@@ -23,23 +24,56 @@ function startMCP() {
   console.log('API Key:', apiKey.substring(0, 10) + '...');
   console.log('API Host:', apiHost);
   
+  const env = {
+    ...process.env,
+    MINIMAX_API_KEY: apiKey,
+    MINIMAX_API_HOST: apiHost,
+  };
+  
   mcpProcess = spawn('uvx', ['minimax-coding-plan-mcp', '-y'], {
-    env: {
-      ...process.env,
-      MINIMAX_API_KEY: apiKey,
-      MINIMAX_API_HOST: apiHost,
-    },
-    stdio: ['pipe', 'pipe', 'pipe']
+    env: env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    shell: false
   });
 
+  let buffer = '';
+  
   mcpProcess.stdout.on('data', (data) => {
-    const text = data.toString();
-    console.log('[MCP stdout]:', text);
-    mcpBuffer += text;
+    buffer += data.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
     
-    if (!mcpReady && text.includes('ready')) {
-      mcpReady = true;
-      console.log('MCP service ready!');
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      console.log('[MCP stdout]:', line);
+      
+      try {
+        const response = JSON.parse(line);
+        if (response.id && pendingRequests.has(response.id)) {
+          const { resolve, reject, method } = pendingRequests.get(response.id);
+          pendingRequests.delete(response.id);
+          
+          if (response.error) {
+            reject(new Error(response.error.message || 'MCP error'));
+          } else {
+            if (method === 'initialize') {
+              initialized = true;
+              mcpProcess.stdin.write(JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'initialized',
+                params: { protocolVersion: '2024-11-05' }
+              }) + '\n');
+            }
+            mcpReady = true;
+            resolve(response.result);
+          }
+        }
+      } catch (e) {
+        if (line.toLowerCase().includes('ready') || line.toLowerCase().includes('listening')) {
+          mcpReady = true;
+          console.log('MCP service ready (via signal)!');
+        }
+      }
     }
   });
 
@@ -51,7 +85,8 @@ function startMCP() {
     console.log('MCP process exited with code:', code);
     mcpProcess = null;
     mcpReady = false;
-    mcpBuffer = '';
+    initialized = false;
+    pendingRequests.clear();
   });
 
   mcpProcess.on('error', (err) => {
@@ -61,57 +96,38 @@ function startMCP() {
 
 function sendMCPRequest(method, params = {}) {
   return new Promise((resolve, reject) => {
-    if (!mcpProcess || !mcpReady) {
-      reject(new Error('MCP service not ready'));
-      return;
+    if (!mcpProcess) {
+      startMCP();
     }
-
-    const request = JSON.stringify({
+    
+    const id = requestId++;
+    const request = {
       jsonrpc: '2.0',
-      id: Date.now(),
+      id,
       method,
       params
-    }) + '\n';
-
-    let responseData = '';
-    let resolved = false;
-
+    };
+    
     const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
+      if (pendingRequests.has(id)) {
+        pendingRequests.delete(id);
         reject(new Error('MCP request timeout'));
       }
     }, 60000);
-
-    const handleData = (data) => {
-      responseData += data.toString();
-      try {
-        const lines = responseData.split('\n').filter(line => line.trim());
-        for (const line of lines) {
-          try {
-            const response = JSON.parse(line);
-            if (response.id && response.id === parseInt(request.match(/"id":\s*(\d+)/)?.[1] || '0')) {
-              resolved = true;
-              clearTimeout(timeout);
-              mcpProcess.stdout.removeListener('data', handleData);
-              
-              if (response.error) {
-                reject(new Error(response.error.message || 'MCP error'));
-              } else {
-                resolve(response.result);
-              }
-            }
-          } catch (e) {
-            // Continue parsing
-          }
-        }
-      } catch (e) {
-        // Continue
-      }
-    };
-
-    mcpProcess.stdout.on('data', handleData);
-    mcpProcess.stdin.write(request);
+    
+    pendingRequests.set(id, {
+      resolve: (result) => {
+        clearTimeout(timeout);
+        resolve(result);
+      },
+      reject: (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+      method
+    });
+    
+    mcpProcess.stdin.write(JSON.stringify(request) + '\n');
   });
 }
 
@@ -120,8 +136,17 @@ app.post('/init', async (req, res) => {
   try {
     if (!mcpProcess) {
       startMCP();
-      // 等待 MCP 启动
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+    // Send initialize request
+    try {
+      await sendMCPRequest('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'mcp-proxy', version: '1.0.0' }
+      });
+    } catch (e) {
+      console.log('Initialize error (may be ok):', e.message);
     }
     res.json({ success: true, ready: mcpReady });
   } catch (error) {
@@ -132,6 +157,10 @@ app.post('/init', async (req, res) => {
 // 获取可用工具列表
 app.get('/tools', async (req, res) => {
   try {
+    if (!mcpProcess) {
+      startMCP();
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
     const result = await sendMCPRequest('tools/list');
     res.json(result);
   } catch (error) {
@@ -142,6 +171,10 @@ app.get('/tools', async (req, res) => {
 // 调用工具
 app.post('/tools/call', async (req, res) => {
   try {
+    if (!mcpProcess) {
+      startMCP();
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
     const { name, arguments: args } = req.body;
     const result = await sendMCPRequest('tools/call', {
       name,
@@ -156,6 +189,10 @@ app.post('/tools/call', async (req, res) => {
 // 网络搜索
 app.post('/web_search', async (req, res) => {
   try {
+    if (!mcpProcess) {
+      startMCP();
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
     const { query } = req.body;
     const result = await sendMCPRequest('tools/call', {
       name: 'web_search',
@@ -163,6 +200,7 @@ app.post('/web_search', async (req, res) => {
     });
     res.json(result);
   } catch (error) {
+    console.error('Web search error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -170,6 +208,10 @@ app.post('/web_search', async (req, res) => {
 // 图片理解
 app.post('/understand_image', async (req, res) => {
   try {
+    if (!mcpProcess) {
+      startMCP();
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
     const { prompt, image_url } = req.body;
     const result = await sendMCPRequest('tools/call', {
       name: 'understand_image',
