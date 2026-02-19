@@ -24,7 +24,7 @@ export function ComparePanel({
   canRemove = true,
   isGenerating = false,
   className,
-  panelIndex: _panelIndex,
+  panelIndex,
 }: ComparePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -32,20 +32,29 @@ export function ComparePanel({
   const displayMessages = useMemo(() => {
     if (!modelConfig) return [];
     
-    return messages.filter((message) => {
-      // 用户消息全部显示
-      if (message.role === 'user') return true;
-      // 系统消息不显示
-      if (message.role === 'system') return false;
-      // 助手消息只显示当前模型的
-      if (message.role === 'assistant') {
-        // 通过 modelId 或消息索引来匹配
-        // 优先匹配 modelId，如果没有则通过消息顺序匹配
-        return message.modelId === modelConfig.name || message.modelId === modelConfig.id;
+    const userMessages: Message[] = [];
+    const assistantMessages: Message[] = [];
+    
+    for (const message of messages) {
+      if (message.role === 'user') {
+        userMessages.push(message);
+      } else if (message.role === 'assistant') {
+        if (message.panelIndex === panelIndex) {
+          assistantMessages.push(message);
+        }
       }
-      return false;
-    });
-  }, [messages, modelConfig]);
+    }
+    
+    const result: Message[] = [];
+    for (let i = 0; i < userMessages.length; i++) {
+      result.push(userMessages[i]);
+      if (assistantMessages[i]) {
+        result.push(assistantMessages[i]);
+      }
+    }
+    
+    return result;
+  }, [messages, modelConfig, panelIndex]);
 
   // 自动滚动到底部
   useEffect(() => {

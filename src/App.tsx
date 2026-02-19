@@ -4,6 +4,7 @@ import { ChatContainer } from './components/chat/ChatContainer';
 import { CompareContainer } from './components/compare/CompareContainer';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { useChatStore } from './stores/chatStore';
+import { initializeModelConfigs } from './stores/modelStore';
 import { ToastContainer, useToast } from './components/common/Toast';
 import { PanelLeft } from 'lucide-react';
 import './styles/index.css';
@@ -22,6 +23,11 @@ function App() {
   
   const currentConversation = getCurrentConversation();
   const mode = currentConversation?.mode || 'single';
+
+  // 初始化：加载配置文件
+  useEffect(() => {
+    initializeModelConfigs();
+  }, []);
 
   // 初始化：如果没有对话，创建一个
   useEffect(() => {

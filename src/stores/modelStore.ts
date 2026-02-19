@@ -3,6 +3,30 @@ import { persist } from 'zustand/middleware';
 import type { ModelConfig, ProviderPreset, ModelState } from '@/types';
 import { storage } from '@/utils/storage';
 
+const isElectron = typeof window !== 'undefined' && window.electronAPI;
+
+async function syncToFile(configs: ModelConfig[]) {
+  if (isElectron && window.electronAPI) {
+    try {
+      await window.electronAPI.writeModelsConfig(configs);
+    } catch (error) {
+      console.error('Failed to sync to file:', error);
+    }
+  }
+}
+
+async function loadFromFile(): Promise<ModelConfig[] | null> {
+  if (isElectron && window.electronAPI) {
+    try {
+      return await window.electronAPI.readModelsConfig();
+    } catch (error) {
+      console.error('Failed to load from file:', error);
+      return null;
+    }
+  }
+  return null;
+}
+
 // 预设的模型提供商
 const defaultPresets: ProviderPreset[] = [
   {
@@ -80,24 +104,32 @@ export const useModelStore = create<ModelStore>()(
           ...config,
           id: `model-${Date.now()}`,
         };
-        set((state) => ({
-          configs: [...state.configs, newConfig],
-        }));
+        set((state) => {
+          const newConfigs = [...state.configs, newConfig];
+          syncToFile(newConfigs);
+          return { configs: newConfigs };
+        });
       },
 
       updateConfig: (id, config) => {
-        set((state) => ({
-          configs: state.configs.map((c) =>
+        set((state) => {
+          const newConfigs = state.configs.map((c) =>
             c.id === id ? { ...c, ...config } : c
-          ),
-        }));
+          );
+          syncToFile(newConfigs);
+          return { configs: newConfigs };
+        });
       },
 
       deleteConfig: (id) => {
-        set((state) => ({
-          configs: state.configs.filter((c) => c.id !== id),
-          selectedModelIds: state.selectedModelIds.filter((mid) => mid !== id),
-        }));
+        set((state) => {
+          const newConfigs = state.configs.filter((c) => c.id !== id);
+          syncToFile(newConfigs);
+          return {
+            configs: newConfigs,
+            selectedModelIds: state.selectedModelIds.filter((mid) => mid !== id),
+          };
+        });
       },
 
       setSelectedModels: (ids) => {
@@ -124,6 +156,7 @@ export const useModelStore = create<ModelStore>()(
       },
 
       reorderConfigs: (configs) => {
+        syncToFile(configs);
         set({ configs });
       },
     }),
@@ -156,3 +189,23 @@ export const useModelStore = create<ModelStore>()(
     }
   )
 );
+
+export async function initializeModelConfigs() {
+  const fileConfigs = await loadFromFile();
+  if (fileConfigs && fileConfigs.length > 0) {
+    const localConfigs = storage.getModelConfigs();
+    const mergedConfigs = [...localConfigs];
+    
+    for (const fileConfig of fileConfigs) {
+      const exists = mergedConfigs.find(c => c.id === fileConfig.id);
+      if (!exists) {
+        mergedConfigs.push(fileConfig);
+      }
+    }
+    
+    if (mergedConfigs.length > localConfigs.length) {
+      const store = useModelStore.getState();
+      store.reorderConfigs(mergedConfigs);
+    }
+  }
+}

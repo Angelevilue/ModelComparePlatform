@@ -9,6 +9,7 @@
 - **多模型对比模式**：同时对比 2-4 个模型的回答
 - **流式响应**：AI回答逐字显示，提供更好的用户体验
 - **系统提示词**：支持自定义系统提示词，可保存为模板
+- **消息编辑**：支持修改和删除对话消息
 
 ### 模型管理
 - 支持多种模型提供商：OpenAI、Anthropic、Google、智谱AI、阿里云、硅基流动等
@@ -21,11 +22,13 @@
 - 代码语法高亮
 - 响应式设计
 - 快捷键支持
-- 消息复制、重新生成
+- 消息复制、重新生成、修改、删除
+- 侧边栏隐藏/展开
 
 ## 技术栈
 
 - **框架**: React 18 + TypeScript
+- **桌面应用**: Electron
 - **构建工具**: Vite
 - **样式**: TailwindCSS
 - **状态管理**: Zustand
@@ -40,14 +43,24 @@
 npm install
 ```
 
-### 开发模式
+### Web 开发模式
 ```bash
 npm run dev
 ```
 
+### Electron 开发模式
+```bash
+npm run electron:dev
+```
+
 ### 构建
 ```bash
+# 构建 Web 版本
 npm run build
+
+# 构建 Electron 桌面应用
+npm run electron:build:mac   # macOS
+npm run electron:build:win   # Windows
 ```
 
 ## 使用说明
@@ -70,6 +83,14 @@ npm run build
 3. 输入系统提示词（可选，可为每个模型单独设置）
 4. 输入问题，所有模型将同时回答
 
+### 4. 消息操作
+- **修改消息**：点击用户消息下方的修改按钮，可以重新编辑问题并重新生成回答
+- **删除消息**：点击用户消息下方的删除按钮，删除该问题及对应的回答
+
+### 5. 侧边栏操作
+- 点击侧边栏顶部的隐藏按钮可以收起侧边栏
+- 点击左侧边缘的展开按钮可以展开侧边栏
+
 ### 快捷键
 - `Ctrl/Cmd + Enter`: 发送消息
 - `Ctrl/Cmd + Shift + Enter`: 换行
@@ -91,18 +112,27 @@ src/
 ├── services/           # API 服务
 ├── utils/              # 工具函数
 └── styles/             # 样式文件
+
+electron/
+├── main.cjs            # Electron 主进程
+└── preload.cjs         # 预加载脚本
 ```
 
 ## 数据持久化
 
+### Web 版本
 所有数据均存储在浏览器 localStorage 中：
 - 对话历史
 - 模型配置（API Key 经过简单加密）
 - 用户设置
 
+### Electron 桌面应用
+- 模型配置会同步保存到本地文件：`~/Library/Application Support/model-compare-platform/config/models.json`
+- 对话历史和用户设置保存在 localStorage 中
+
 ## 注意事项
 
-1. **API Key 安全**：API Key 存储在本地浏览器中，仅经过简单的 XOR 加密。请勿在公共电脑上使用，也不要分享包含 API Key 的配置文件。
+1. **API Key 安全**：API Key 存储在本地，仅经过简单的 XOR 加密。请勿在公共电脑上使用，也不要分享包含 API Key 的配置文件。
 
 2. **CORS 限制**：由于浏览器安全限制，部分 API 可能需要配置 CORS 代理。
 

@@ -128,11 +128,13 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
     // 为每个模型添加 AI 消息占位
     const messageIds: { modelId: string; messageId: string }[] = [];
     
-    for (const model of validModels) {
+    for (let i = 0; i < validModels.length; i++) {
+      const model = validModels[i];
       const messageId = addMessage(conversationId, {
         role: 'assistant',
         content: '',
         modelId: model.name,
+        panelIndex: i,
         isStreaming: true,
       });
       messageIds.push({ modelId: model.id, messageId });
