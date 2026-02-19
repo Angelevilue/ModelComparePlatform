@@ -40,14 +40,8 @@ function App() {
     const shareParam = urlParams.get('share');
     if (shareParam) {
       try {
-        // URL 解码后进行 base64 解码
-        const decodedParam = decodeURIComponent(shareParam);
-        const binaryStr = atob(decodedParam);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-        const jsonStr = new TextDecoder().decode(bytes);
+        // 简单解码
+        const jsonStr = decodeURIComponent(shareParam);
         const decoded = JSON.parse(jsonStr);
         setShareData(decoded);
         window.history.replaceState({}, '', window.location.pathname);

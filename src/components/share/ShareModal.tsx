@@ -55,11 +55,9 @@ export function ShareModal({ isOpen, onClose, messages, title = '分享对话' }
       createdAt: Date.now(),
     };
     
-    // UTF-8 safe base64 encoding
+    // 简单可靠的编码方式
     const jsonStr = JSON.stringify(shareData);
-    const utf8Bytes = new TextEncoder().encode(jsonStr);
-    const binaryStr = Array.from(utf8Bytes).map(b => String.fromCharCode(b)).join('');
-    const encoded = btoa(binaryStr);
+    const encoded = encodeURIComponent(jsonStr);
     const link = `${window.location.origin}${window.location.pathname}?share=${encoded}`;
     setShareLink(link);
   };
