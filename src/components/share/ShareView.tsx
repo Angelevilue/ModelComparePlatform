@@ -32,10 +32,13 @@ export function ShareView({ onClose }: ShareViewProps) {
     const shareParam = urlParams.get('share');
     if (shareParam) {
       try {
-        const decoded = JSON.parse(decodeURIComponent(atob(shareParam)));
+        // 先 base64 解码，再用 decodeURIComponent 处理 Unicode
+        const jsonStr = decodeURIComponent(escape(atob(shareParam)));
+        const decoded = JSON.parse(jsonStr);
         setShareData(decoded);
         window.history.replaceState({}, '', window.location.pathname);
-      } catch {
+      } catch (e) {
+        console.error('Decode error:', e);
         setError('无效的分享链接');
       }
     } else {

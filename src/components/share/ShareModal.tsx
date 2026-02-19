@@ -55,7 +55,9 @@ export function ShareModal({ isOpen, onClose, messages, title = '分享对话' }
       createdAt: Date.now(),
     };
     
-    const encoded = btoa(encodeURIComponent(JSON.stringify(shareData)));
+    // 先 JSON 序列化，再用 encodeURIComponent 处理 Unicode，最后 base64
+    const jsonStr = JSON.stringify(shareData);
+    const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
     const link = `${window.location.origin}${window.location.pathname}?share=${encoded}`;
     setShareLink(link);
   };
