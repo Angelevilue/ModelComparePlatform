@@ -2,9 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Conversation, Message, ChatState } from '@/types';
 import { generateId, generateConversationTitle } from '@/utils/helpers';
+import { apiService } from '@/services/api';
 
 interface ChatStore extends ChatState {
-  // Actions
+  isLoaded: boolean;
+  loadConversations: () => Promise<void>;
   createConversation: (mode?: 'single' | 'compare', compareCount?: number) => string;
   deleteConversation: (id: string) => void;
   setCurrentConversation: (id: string | null) => void;
@@ -39,9 +41,23 @@ export const useChatStore = create<ChatStore>()(
       conversations: [],
       currentConversationId: null,
       isGenerating: false,
+      isLoaded: false,
+
+      loadConversations: async () => {
+        try {
+          const conversations = await apiService.getConversations();
+          set({ conversations, isLoaded: true });
+        } catch (error) {
+          console.log('Backend not available, using localStorage');
+          set({ isLoaded: true });
+        }
+      },
 
       createConversation: (mode = 'single', compareCount = 1) => {
         const conversation = createEmptyConversation(mode, compareCount);
+        
+        apiService.createConversation(conversation.id, mode, compareCount).catch(() => {});
+        
         set((state) => ({
           conversations: [conversation, ...state.conversations],
           currentConversationId: conversation.id,
@@ -50,6 +66,8 @@ export const useChatStore = create<ChatStore>()(
       },
 
       deleteConversation: (id) => {
+        apiService.deleteConversation(id).catch(() => {});
+        
         set((state) => {
           const newConversations = state.conversations.filter((c) => c.id !== id);
           return {
@@ -74,6 +92,16 @@ export const useChatStore = create<ChatStore>()(
           timestamp: Date.now(),
         };
 
+        apiService.addMessage(conversationId, {
+          messageId,
+          role: message.role,
+          content: message.content,
+          modelId: message.modelId,
+          panelIndex: message.panelIndex,
+          isError: message.isError,
+          isStreaming: message.isStreaming,
+        }).catch(() => {});
+
         set((state) => ({
           conversations: state.conversations.map((c) => {
             if (c.id !== conversationId) return c;
@@ -97,6 +125,8 @@ export const useChatStore = create<ChatStore>()(
       },
 
       updateMessage: (conversationId, messageId, updates) => {
+        apiService.updateMessage(conversationId, messageId, updates).catch(() => {});
+        
         set((state) => ({
           conversations: state.conversations.map((c) => {
             if (c.id !== conversationId) return c;
@@ -112,6 +142,8 @@ export const useChatStore = create<ChatStore>()(
       },
 
       deleteMessage: (conversationId, messageId) => {
+        apiService.deleteMessage(conversationId, messageId).catch(() => {});
+        
         set((state) => ({
           conversations: state.conversations.map((c) => {
             if (c.id !== conversationId) return c;
@@ -125,6 +157,8 @@ export const useChatStore = create<ChatStore>()(
       },
 
       clearMessages: (conversationId) => {
+        apiService.clearMessages(conversationId).catch(() => {});
+        
         set((state) => ({
           conversations: state.conversations.map((c) => {
             if (c.id !== conversationId) return c;
@@ -143,6 +177,13 @@ export const useChatStore = create<ChatStore>()(
       },
 
       updateConversation: (id, updates) => {
+        if (updates.title || updates.systemPrompt) {
+          apiService.updateConversation(id, {
+            title: updates.title,
+            systemPrompt: updates.systemPrompt,
+          }).catch(() => {});
+        }
+        
         set((state) => ({
           conversations: state.conversations.map((c) =>
             c.id === id ? { ...c, ...updates, updatedAt: Date.now() } : c

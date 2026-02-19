@@ -15,7 +15,9 @@ function App() {
     getCurrentConversation,
     createConversation,
     setCurrentConversation,
-    conversations 
+    conversations,
+    isLoaded,
+    loadConversations
   } = useChatStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
@@ -24,20 +26,22 @@ function App() {
   const currentConversation = getCurrentConversation();
   const mode = currentConversation?.mode || 'single';
 
-  // 初始化：加载配置文件
+  // 初始化：加载配置和对话
   useEffect(() => {
     initializeModelConfigs();
+    loadConversations();
   }, []);
 
   // 初始化：如果没有对话，创建一个
   useEffect(() => {
+    if (!isLoaded) return;
     if (conversations.length === 0) {
       const newId = createConversation('single');
       setCurrentConversation(newId);
     } else if (!currentConversationId) {
       setCurrentConversation(conversations[0].id);
     }
-  }, []);
+  }, [isLoaded]);
 
   // 监听错误
   useEffect(() => {
