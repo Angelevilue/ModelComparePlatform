@@ -43,7 +43,7 @@ app.on('activate', () => {
   }
 });
 
-const configDir = path.join(app.getPath('userData'), 'config');
+const configDir = path.join(__dirname, '../config');
 const modelsConfigPath = path.join(configDir, 'models.json');
 
 function ensureConfigDir() {

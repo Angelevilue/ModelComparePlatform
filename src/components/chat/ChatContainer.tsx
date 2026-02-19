@@ -386,6 +386,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
             disabled={!modelConfig}
             modelName={modelConfig?.name}
             showModelInfo={true}
+            autoFocus={hasMessages || isGenerating}
             onSelectAgent={(agentPrompt) => {
               setSystemPrompt(agentPrompt);
             }}

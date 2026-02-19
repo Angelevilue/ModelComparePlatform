@@ -13,6 +13,7 @@ interface ChatInputProps {
   modelName?: string;
   showModelInfo?: boolean;
   onSelectAgent?: (systemPrompt: string) => void;
+  autoFocus?: boolean;
 }
 
 export function ChatInput({
@@ -23,12 +24,29 @@ export function ChatInput({
   modelName,
   showModelInfo = false,
   onSelectAgent,
+  autoFocus = false,
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { enterToSend } = useSettingsStore();
   const [isFocused, setIsFocused] = useState(false);
+  const [wasLoading, setWasLoading] = useState(false);
+
+  // 聚焦输入框
+  useEffect(() => {
+    if (autoFocus && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [autoFocus]);
+
+  // 生成完成后聚焦输入框
+  useEffect(() => {
+    if (wasLoading && !isLoading && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+    setWasLoading(isLoading);
+  }, [isLoading, wasLoading]);
 
   // 自动调整高度
   useEffect(() => {
@@ -47,6 +65,7 @@ export function ChatInput({
     setAttachments([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+      textareaRef.current.focus();
     }
   }, [input, attachments, isLoading, disabled, onSend]);
 
