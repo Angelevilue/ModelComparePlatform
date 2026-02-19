@@ -3,8 +3,9 @@ import { Modal } from '../common/Modal';
 import { ModelConfigList } from './ModelConfigForm';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useModelStore } from '@/stores/modelStore';
+import { apiService } from '@/services/api';
 import { cn } from '@/utils/helpers';
-import { Palette, Keyboard, Database, Plug2, Plus, Trash2, ExternalLink, Power, PowerOff } from 'lucide-react';
+import { Palette, Keyboard, Database, Plug2, Plus, Trash2, ExternalLink, Power, PowerOff, Loader2 } from 'lucide-react';
 import type { MCPServerConfig } from '@/types';
 
 interface SettingsModalProps {
@@ -79,6 +80,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   添加服务
                 </button>
               </div>
+
+              <MCPTestPanel />
 
               <div className="space-y-3">
                 {mcpServers.map((server) => (
@@ -315,6 +318,136 @@ function MCPServerCard({ server, onUpdate, onDelete }: MCPServerCardProps) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MCPTestPanel() {
+  const [status, setStatus] = useState<'idle' | 'checking' | 'ready' | 'error'>('idle');
+  const [statusText, setStatusText] = useState('');
+  const [tools, setTools] = useState<string[]>([]);
+  const [testResult, setTestResult] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+
+  const checkStatus = async () => {
+    setStatus('checking');
+    setStatusText('检查中...');
+    try {
+      const result = await apiService.getMCPHealth();
+      if (result.status === 'ready') {
+        setStatus('ready');
+        setStatusText('MCP 服务已就绪');
+        
+        const toolsResult = await apiService.getMCPTools();
+        if (toolsResult.result?.tools) {
+          setTools(toolsResult.result.tools.map((t: any) => t.name));
+        }
+      } else {
+        setStatus('error');
+        setStatusText('MCP 服务未运行');
+      }
+    } catch (error: any) {
+      setStatus('error');
+      setStatusText(error.message || '无法连接 MCP 服务');
+    }
+  };
+
+  const initMCP = async () => {
+    setStatus('checking');
+    setStatusText('初始化中...');
+    try {
+      await apiService.initMCP();
+      setTimeout(checkStatus, 2000);
+    } catch (error: any) {
+      setStatus('error');
+      setStatusText(error.message || '初始化失败');
+    }
+  };
+
+  const testWebSearch = async () => {
+    setIsTesting(true);
+    setTestResult('搜索中...');
+    try {
+      const result = await apiService.webSearch('Hello World');
+      setTestResult(JSON.stringify(result, null, 2));
+    } catch (error: any) {
+      setTestResult('错误: ' + (error.message || '搜索失败'));
+    }
+    setIsTesting(false);
+  };
+
+  return (
+    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h5 className="text-sm font-medium text-gray-900">MCP 测试</h5>
+          <p className="text-xs text-gray-500 mt-1">
+            测试 MCP 代理服务是否正常工作
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={checkStatus}
+            disabled={status === 'checking'}
+            className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+          >
+            {status === 'checking' ? '检查中...' : '检查状态'}
+          </button>
+          <button
+            onClick={initMCP}
+            disabled={status === 'checking'}
+            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          >
+            初始化 MCP
+          </button>
+        </div>
+      </div>
+
+      {statusText && (
+        <div className={cn(
+          'p-3 rounded-lg text-sm',
+          status === 'ready' ? 'bg-green-100 text-green-700' :
+          status === 'error' ? 'bg-red-100 text-red-700' :
+          'bg-yellow-100 text-yellow-700'
+        )}>
+          {statusText}
+        </div>
+      )}
+
+      {tools.length > 0 && (
+        <div>
+          <p className="text-xs text-gray-500 mb-2">可用工具:</p>
+          <div className="flex flex-wrap gap-2">
+            {tools.map((tool) => (
+              <span key={tool} className="px-2 py-1 bg-primary-100 text-primary-700 text-xs rounded">
+                {tool}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tools.includes('web_search') && (
+        <div className="pt-2 border-t border-gray-200">
+          <button
+            onClick={testWebSearch}
+            disabled={isTesting || status !== 'ready'}
+            className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            {isTesting && <Loader2 className="w-4 h-4 animate-spin" />}
+            测试网络搜索
+          </button>
+        </div>
+      )}
+
+      {testResult && (
+        <div className="mt-2">
+          <p className="text-xs text-gray-500 mb-1">测试结果:</p>
+          <pre className="p-3 bg-white rounded-lg text-xs overflow-x-auto max-h-40 border border-gray-200">
+            {testResult}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
