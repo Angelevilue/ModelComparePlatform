@@ -40,7 +40,13 @@ function App() {
     const shareParam = urlParams.get('share');
     if (shareParam) {
       try {
-        const jsonStr = decodeURIComponent(escape(atob(shareParam)));
+        // UTF-8 safe base64 decoding
+        const binaryStr = atob(shareParam);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        const jsonStr = new TextDecoder().decode(bytes);
         const decoded = JSON.parse(jsonStr);
         setShareData(decoded);
         window.history.replaceState({}, '', window.location.pathname);
