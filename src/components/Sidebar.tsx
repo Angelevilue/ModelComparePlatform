@@ -101,10 +101,14 @@ export function Sidebar({ className, onCollapse }: SidebarProps) {
                 {(isActive || isHovered) && (
                   <button
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       deleteConversation(conversation.id);
                     }}
-                    className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className={cn(
+                      "p-1 text-gray-500 hover:text-red-400 transition-opacity",
+                      isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

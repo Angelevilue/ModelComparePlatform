@@ -237,6 +237,11 @@ export const useChatStore = create<ChatStore>()(
     }),
     {
       name: 'chat-store',
+      partialize: (state) => ({
+        conversations: state.conversations,
+        currentConversationId: state.currentConversationId,
+        isGenerating: state.isGenerating,
+      }),
     }
   )
 );
