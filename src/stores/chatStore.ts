@@ -49,6 +49,14 @@ export const useChatStore = create<ChatStore>()(
       loadedConversationIds: new Set<string>(),
 
       loadConversations: async () => {
+        const { conversations } = get();
+        
+        // 如果已经有本地数据（从 persist 恢复），保留本地数据，只标记为已加载
+        if (conversations.length > 0) {
+          set({ isLoaded: true });
+          return;
+        }
+        
         try {
           const conversations = await apiService.getConversations();
           set({ conversations, isLoaded: true });
