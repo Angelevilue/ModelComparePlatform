@@ -107,7 +107,8 @@ export function buildMessageHistory(
     result.push({ role: 'system', content: systemPrompt });
   }
   
-  // 从后往前找最近 maxRounds 条用户消息的位置
+  // 一轮对话 = 一条用户消息 + 一条AI回复
+  // 从后往前找最近 maxRounds 条用户消息的位置，即最近 maxRounds 轮对话
   let userCount = 0;
   let startIndex = 0;
   
@@ -121,7 +122,7 @@ export function buildMessageHistory(
     }
   }
   
-  // 只取 startIndex 之后的消息作为上下文
+  // 只取 startIndex 之后的消息作为上下文（约 maxRounds * 2 条消息）
   const contextMessages = messages.slice(startIndex);
   
   for (const msg of contextMessages) {
