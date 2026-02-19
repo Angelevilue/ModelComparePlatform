@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, X, CornerDownLeft, Command, Bot, Paperclip } from 'lucide-react';
+import { Send, X, CornerDownLeft, Command, Bot, Paperclip, Square } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { FileAttachment, Attachment } from './FileAttachment';
@@ -7,6 +7,7 @@ import { AgentConfigButton } from './AgentConfigButton';
 
 interface ChatInputProps {
   onSend: (message: string, attachments: Attachment[]) => void;
+  onCancel?: () => void;
   isLoading?: boolean;
   placeholder?: string;
   disabled?: boolean;
@@ -18,6 +19,7 @@ interface ChatInputProps {
 
 export function ChatInput({
   onSend,
+  onCancel,
   isLoading = false,
   placeholder = '输入消息...',
   disabled = false,
@@ -236,29 +238,30 @@ export function ChatInput({
             </div>
           )}
           
-          {/* 发送按钮 */}
-          <button
-            onClick={handleSend}
-            disabled={(!input.trim() && attachments.length === 0) || isLoading || disabled || isOverLimit}
-            className={cn(
-              'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-              (input.trim() || attachments.length > 0) && !isLoading && !disabled && !isOverLimit
-                ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm hover:shadow'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            )}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="hidden sm:inline">生成中...</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline">发送</span>
-              </>
-            )}
-          </button>
+          {/* 发送/取消按钮 */}
+          {isLoading && onCancel ? (
+            <button
+              onClick={onCancel}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-red-500 text-white hover:bg-red-600 shadow-sm hover:shadow"
+            >
+              <Square className="w-4 h-4" />
+              <span className="hidden sm:inline">停止</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={(!input.trim() && attachments.length === 0) || isLoading || disabled || isOverLimit}
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                (input.trim() || attachments.length > 0) && !isLoading && !disabled && !isOverLimit
+                  ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm hover:shadow'
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              )}
+            >
+              <Send className="w-4 h-4" />
+              <span className="hidden sm:inline">发送</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
