@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ModelConfig, ProviderPreset, ModelState } from '@/types';
-import { storage } from '@/utils/storage';
+import type { MCPServerConfig, ModelConfig, ProviderPreset, ModelState } from '@/types';
 import { apiService } from '@/services/api';
+import { generateId } from '@/utils/helpers';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI;
 
@@ -39,130 +39,124 @@ async function loadFromFile(): Promise<ModelConfig[] | null> {
       return await window.electronAPI.readModelsConfig();
     } catch (error) {
       console.error('Failed to load from file:', error);
-      return null;
     }
   }
   return null;
 }
 
-// 预设的模型提供商
 const defaultPresets: ProviderPreset[] = [
   {
     name: 'OpenAI',
     baseURL: 'https://api.openai.com/v1',
-    defaultModels: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'],
+    defaultModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
   },
   {
     name: 'Anthropic',
     baseURL: 'https://api.anthropic.com/v1',
-    defaultModels: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
+    defaultModels: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
   },
   {
     name: 'Google',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta',
-    defaultModels: ['gemini-pro', 'gemini-pro-vision'],
+    defaultModels: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
   },
   {
     name: '智谱AI',
     baseURL: 'https://open.bigmodel.cn/api/paas/v4',
-    defaultModels: ['glm-4', 'glm-3-turbo'],
+    defaultModels: ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-3-turbo'],
   },
   {
     name: '阿里云',
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    defaultModels: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
+    defaultModels: ['qwen-turbo', 'qwen-plus', 'qwen-max', 'qwen-max-longcontext'],
   },
   {
     name: '硅基流动',
     baseURL: 'https://api.siliconflow.cn/v1',
-    defaultModels: ['deepseek-ai/DeepSeek-V2.5', 'Qwen/Qwen2.5-72B-Instruct'],
+    defaultModels: ['Qwen/Qwen2-72B-Instruct', 'Qwen/Qwen2-7B-Instruct', 'THUDM/glm-4-9b-chat'],
   },
   {
-    name: '自定义',
-    baseURL: 'http://localhost:11434/v1',
-    defaultModels: ['llama2', 'vicuna', 'mistral'],
+    name: 'Moonshot',
+    baseURL: 'https://api.moonshot.cn/v1',
+    defaultModels: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
+  },
+  {
+    name: 'DeepSeek',
+    baseURL: 'https://api.deepseek.com/v1',
+    defaultModels: ['deepseek-chat', 'deepseek-coder'],
+  },
+  {
+    name: '本地模型',
+    baseURL: 'http://localhost:8080/v1',
+    defaultModels: ['local-model'],
   },
 ];
 
-// 默认模型配置
-const createDefaultModel = (): ModelConfig => ({
-  id: 'default',
-  name: 'GPT-3.5',
-  provider: 'OpenAI',
-  modelId: 'gpt-3.5-turbo',
-  apiKey: '',
-  baseURL: 'https://api.openai.com/v1',
-  temperature: 0.7,
-  maxTokens: 2048,
-  topP: 1,
-  isEnabled: true,
-});
+const defaultMCPServers: MCPServerConfig[] = [
+  {
+    id: 'modelscope-fetch',
+    name: 'ModelScope Fetch',
+    url: 'https://modelscope.cn/mcp/servers/@modelcontextprotocol/fetch',
+    isEnabled: false,
+  },
+];
 
 interface ModelStore extends ModelState {
-  // Actions
-  addConfig: (config: Omit<ModelConfig, 'id'>) => void;
-  updateConfig: (id: string, config: Partial<ModelConfig>) => void;
+  setConfigs: (configs: ModelConfig[]) => void;
+  addConfig: (config: Omit<ModelConfig, 'id'>) => string;
+  updateConfig: (id: string, updates: Partial<ModelConfig>) => void;
   deleteConfig: (id: string) => void;
-  setSelectedModels: (ids: string[]) => void;
-  getConfigById: (id: string) => ModelConfig | undefined;
-  getEnabledConfigs: () => ModelConfig[];
   duplicateConfig: (id: string) => void;
-  reorderConfigs: (configs: ModelConfig[]) => void;
+  setSelectedModels: (ids: string[]) => void;
+  toggleModel: (id: string) => void;
+  getEnabledConfigs: () => ModelConfig[];
+  getConfigById: (id: string) => ModelConfig | undefined;
+  initializeConfigs: () => Promise<void>;
+  addMCPServer: (server: Omit<MCPServerConfig, 'id'>) => string;
+  updateMCPServer: (id: string, updates: Partial<MCPServerConfig>) => void;
+  deleteMCPServer: (id: string) => void;
+  getEnabledMCPServers: () => MCPServerConfig[];
 }
 
 export const useModelStore = create<ModelStore>()(
   persist(
     (set, get) => ({
-      configs: [createDefaultModel()],
+      configs: [],
       presets: defaultPresets,
-      selectedModelIds: ['default'],
+      selectedModelIds: [],
+      mcpServers: defaultMCPServers,
 
-      addConfig: (config) => {
-        const newConfig: ModelConfig = {
-          ...config,
-          id: `model-${Date.now()}`,
-        };
-        set((state) => {
-          const newConfigs = [...state.configs, newConfig];
-          syncToServer(newConfigs);
-          syncToFile(newConfigs);
-          return { configs: newConfigs };
-        });
+      setConfigs: (configs) => {
+        set({ configs });
+        syncToServer(configs);
+        syncToFile(configs);
       },
 
-      updateConfig: (id, config) => {
-        set((state) => {
-          const newConfigs = state.configs.map((c) =>
-            c.id === id ? { ...c, ...config } : c
-          );
-          syncToServer(newConfigs);
-          syncToFile(newConfigs);
-          return { configs: newConfigs };
-        });
+      addConfig: (config) => {
+        const id = generateId();
+        const newConfig = { ...config, id };
+        const configs = [...get().configs, newConfig];
+        set({ configs });
+        syncToServer(configs);
+        syncToFile(configs);
+        return id;
+      },
+
+      updateConfig: (id, updates) => {
+        const configs = get().configs.map((c) =>
+          c.id === id ? { ...c, ...updates } : c
+        );
+        set({ configs });
+        syncToServer(configs);
+        syncToFile(configs);
       },
 
       deleteConfig: (id) => {
-        set((state) => {
-          const newConfigs = state.configs.filter((c) => c.id !== id);
-          syncToServer(newConfigs);
-          syncToFile(newConfigs);
-          return {
-            configs: newConfigs,
-            selectedModelIds: state.selectedModelIds.filter((mid) => mid !== id),
-          };
-        });
-      },
-
-      setSelectedModels: (ids) => {
-        set({ selectedModelIds: ids });
-      },
-
-      getConfigById: (id) => {
-        return get().configs.find((c) => c.id === id);
-      },
-
-      getEnabledConfigs: () => {
-        return get().configs.filter((c) => c.isEnabled);
+        const configs = get().configs.filter((c) => c.id !== id);
+        const selectedModelIds = get().selectedModelIds.filter((mid) => mid !== id);
+        set({ configs, selectedModelIds });
+        syncToServer(configs);
+        syncToFile(configs);
       },
 
       duplicateConfig: (id) => {
@@ -176,67 +170,98 @@ export const useModelStore = create<ModelStore>()(
         }
       },
 
-      reorderConfigs: (configs) => {
-        syncToServer(configs);
-        syncToFile(configs);
-        set({ configs });
+      setSelectedModels: (ids) => {
+        set({ selectedModelIds: ids });
+      },
+
+      toggleModel: (id) => {
+        const selectedModelIds = get().selectedModelIds.includes(id)
+          ? get().selectedModelIds.filter((mid) => mid !== id)
+          : [...get().selectedModelIds, id];
+        set({ selectedModelIds });
+      },
+
+      getEnabledConfigs: () => {
+        return get().configs.filter((c) => c.isEnabled);
+      },
+
+      getConfigById: (id) => {
+        return get().configs.find((c) => c.id === id);
+      },
+
+      initializeConfigs: async () => {
+        const { configs: localConfigs } = get();
+        
+        if (localConfigs.length > 0) {
+          return;
+        }
+
+        const serverConfigs = await loadFromServer();
+        if (serverConfigs && serverConfigs.length > 0) {
+          set({ configs: serverConfigs });
+          return;
+        }
+
+        const fileConfigs = await loadFromFile();
+        if (fileConfigs && fileConfigs.length > 0) {
+          set({ configs: fileConfigs });
+        }
+      },
+
+      addMCPServer: (server) => {
+        const id = generateId();
+        const newServer = { ...server, id };
+        const mcpServers = [...get().mcpServers, newServer];
+        set({ mcpServers });
+        return id;
+      },
+
+      updateMCPServer: (id, updates) => {
+        const mcpServers = get().mcpServers.map((s) =>
+          s.id === id ? { ...s, ...updates } : s
+        );
+        set({ mcpServers });
+      },
+
+      deleteMCPServer: (id) => {
+        const mcpServers = get().mcpServers.filter((s) => s.id !== id);
+        set({ mcpServers });
+      },
+
+      getEnabledMCPServers: () => {
+        return get().mcpServers.filter((s) => s.isEnabled);
       },
     }),
     {
       name: 'model-store',
-      storage: {
-        getItem: (name) => {
-          const str = localStorage.getItem(name);
-          if (!str) return null;
-          try {
-            const data = JSON.parse(str);
-            // 解密 API Keys
-            if (data.state?.configs) {
-              data.state.configs = storage.getModelConfigs();
-            }
-            return data;
-          } catch {
-            return null;
-          }
-        },
-        setItem: (name, value) => {
-          // 加密 API Keys 后保存
-          if (value.state?.configs) {
-            storage.saveModelConfigs(value.state.configs);
-          }
-          localStorage.setItem(name, JSON.stringify(value));
-        },
-        removeItem: (name) => localStorage.removeItem(name),
-      },
+      partialize: (state) => ({
+        configs: state.configs,
+        selectedModelIds: state.selectedModelIds,
+        mcpServers: state.mcpServers,
+      }),
     }
   )
 );
 
 export async function initializeModelConfigs() {
+  const { configs } = useModelStore.getState();
+  
+  // 如果已经有配置，直接返回
+  if (configs.length > 0) {
+    return;
+  }
+
   // 1. 优先从后端 API 加载配置
   const serverConfigs = await loadFromServer();
   if (serverConfigs && serverConfigs.length > 0) {
     const store = useModelStore.getState();
-    store.reorderConfigs(serverConfigs);
+    store.setConfigs(serverConfigs);
     return;
   }
 
   // 2. 如果后端不可用，从 Electron 文件加载
   const fileConfigs = await loadFromFile();
   if (fileConfigs && fileConfigs.length > 0) {
-    const localConfigs = storage.getModelConfigs();
-    const mergedConfigs = [...localConfigs];
-    
-    for (const fileConfig of fileConfigs) {
-      const exists = mergedConfigs.find(c => c.id === fileConfig.id);
-      if (!exists) {
-        mergedConfigs.push(fileConfig);
-      }
-    }
-    
-    if (mergedConfigs.length > localConfigs.length) {
-      const store = useModelStore.getState();
-      store.reorderConfigs(mergedConfigs);
-    }
+    useModelStore.getState().setConfigs(fileConfigs);
   }
 }

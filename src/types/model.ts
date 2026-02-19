@@ -19,11 +19,29 @@ export interface ProviderPreset {
   defaultModels: string[];
 }
 
+// MCP 服务器配置
+export interface MCPServerConfig {
+  id: string;
+  name: string;
+  url: string;
+  authToken?: string;
+  isEnabled: boolean;
+  tools?: MCPTool[];
+}
+
+// MCP 工具
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
 // 模型状态
 export interface ModelState {
   configs: ModelConfig[];
   presets: ProviderPreset[];
   selectedModelIds: string[];
+  mcpServers: MCPServerConfig[];
 }
 
 // OpenAI 兼容请求体
