@@ -3,13 +3,14 @@ import { MessageList } from './MessageList';
 import { ChatInput } from './ChatInput';
 import { ModelSelector } from './ModelSelector';
 import { SystemPromptEditor } from '../settings/SystemPromptEditor';
+import { ShareModal } from '../share/ShareModal';
 
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { streamingManager, buildMessageHistory } from '@/services/streaming';
 import type { Attachment } from './FileAttachment';
 
-import { Trash2, Settings, MessageSquarePlus } from 'lucide-react';
+import { Trash2, Settings, MessageSquarePlus, Share2 } from 'lucide-react';
 
 interface ChatContainerProps {
   conversationId: string;
@@ -32,6 +33,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
   const conversation = getConversationById(conversationId);
   const [systemPrompt, setSystemPrompt] = useState(conversation?.systemPrompt || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const currentMessageIdRef = useRef<string | null>(null);
 
   if (!conversation) {
@@ -352,6 +354,13 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setIsShareOpen(true)}
+            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+            title="分享"
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => clearMessages(conversationId)}
             className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="清空对话"
@@ -408,6 +417,13 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           />
         </div>
       </div>
+
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        messages={conversation.messages}
+        title={conversation.title}
+      />
     </div>
   );
 }

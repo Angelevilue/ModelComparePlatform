@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatContainer } from './components/chat/ChatContainer';
 import { CompareContainer } from './components/compare/CompareContainer';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { ShareView } from './components/share/ShareView';
 import { useChatStore } from './stores/chatStore';
 import { initializeModelConfigs } from './stores/modelStore';
 import { ToastContainer, useToast } from './components/common/Toast';
@@ -21,18 +22,25 @@ function App() {
   } = useChatStore();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [showShareView, setShowShareView] = useState(false);
   const { toasts, removeToast } = useToast();
   
   const currentConversation = getCurrentConversation();
   const mode = currentConversation?.mode || 'single';
 
-  // 初始化：加载配置和对话
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareParam = urlParams.get('share');
+    if (shareParam) {
+      setShowShareView(true);
+    }
+  }, []);
+
   useEffect(() => {
     initializeModelConfigs();
     loadConversations();
   }, []);
 
-  // 初始化：如果没有对话，创建一个
   useEffect(() => {
     if (!isLoaded) return;
     if (conversations.length === 0) {
@@ -43,7 +51,6 @@ function App() {
     }
   }, [isLoaded]);
 
-  // 监听错误
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       console.error('应用错误:', event.error);
@@ -52,9 +59,12 @@ function App() {
     return () => window.removeEventListener('error', handleError);
   }, []);
 
+  if (showShareView) {
+    return <ShareView onClose={() => setShowShareView(false)} />;
+  }
+
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      {/* 侧边栏 */}
       {isSidebarVisible && (
         <Sidebar 
           className="w-64 flex-shrink-0" 
@@ -62,9 +72,7 @@ function App() {
         />
       )}
 
-      {/* 主内容区 */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 侧边栏展开按钮 */}
         {!isSidebarVisible && (
           <button
             onClick={() => setIsSidebarVisible(true)}
@@ -94,13 +102,11 @@ function App() {
         )}
       </div>
 
-      {/* 设置弹窗 */}
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      {/* Toast 通知 */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );

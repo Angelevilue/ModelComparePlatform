@@ -2,13 +2,14 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ComparePanel } from './ComparePanel';
 import { ChatInput } from '../chat/ChatInput';
 import { SystemPromptEditor } from '../settings/SystemPromptEditor';
+import { ShareModal } from '../share/ShareModal';
 
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { streamingManager, buildMessageHistory } from '@/services/streaming';
 import type { Attachment } from '@/components/chat/FileAttachment';
 import { cn } from '@/utils/helpers';
-import { Trash2, Plus, Settings, MessageSquarePlus, Users } from 'lucide-react';
+import { Trash2, Plus, Settings, MessageSquarePlus, Users, Share2 } from 'lucide-react';
 import type { ModelConfig } from '@/types';
 
 interface CompareContainerProps {
@@ -34,6 +35,7 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
   const conversation = getConversationById(conversationId);
   const [systemPrompt, setSystemPrompt] = useState(conversation?.systemPrompt || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const currentMessageIdsRef = useRef<string[]>([]);
   
   const [panelModels, setPanelModels] = useState<(ModelConfig | undefined)[]>([]);
@@ -263,6 +265,13 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
             </button>
           )}
           <button
+            onClick={() => setIsShareOpen(true)}
+            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+            title="分享"
+          >
+            <Share2 className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => clearMessages(conversationId)}
             className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="清空对话"
@@ -333,6 +342,13 @@ export function CompareContainer({ conversationId, onOpenSettings }: CompareCont
           />
         </div>
       </div>
+
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        messages={conversation.messages}
+        title={conversation.title}
+      />
     </div>
   );
 }
