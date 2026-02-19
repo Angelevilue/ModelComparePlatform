@@ -40,8 +40,9 @@ function App() {
     const shareParam = urlParams.get('share');
     if (shareParam) {
       try {
-        // UTF-8 safe base64 decoding
-        const binaryStr = atob(shareParam);
+        // URL 解码后进行 base64 解码
+        const decodedParam = decodeURIComponent(shareParam);
+        const binaryStr = atob(decodedParam);
         const bytes = new Uint8Array(binaryStr.length);
         for (let i = 0; i < binaryStr.length; i++) {
           bytes[i] = binaryStr.charCodeAt(i);
