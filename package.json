@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "vite",
     "server": "node server.cjs",
+    "mcp:proxy": "node mcp-proxy.cjs",
+    "mcp:start": "concurrently -k \"npm run mcp:proxy\" \"npm run server\" \"npm run dev\"",
     "dev:all": "concurrently -k \"npm run server\" \"npm run dev\"",
     "db:start": "docker-compose up -d",
     "db:stop": "docker-compose down",

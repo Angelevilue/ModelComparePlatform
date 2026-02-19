@@ -67,4 +67,35 @@ export const apiService = {
     const response = await axios.get(`${API_BASE}/health`);
     return response.data;
   },
+
+  // ==================== MCP 服务 ====================
+  async initMCP() {
+    const response = await axios.post(`${API_BASE}/mcp/init`);
+    return response.data;
+  },
+
+  async getMCPHealth() {
+    const response = await axios.get(`${API_BASE}/mcp/health`);
+    return response.data;
+  },
+
+  async getMCPTools() {
+    const response = await axios.get(`${API_BASE}/mcp/tools`);
+    return response.data;
+  },
+
+  async callMCPTool(tool: string, args: Record<string, unknown>) {
+    const response = await axios.post(`${API_BASE}/mcp/call`, { tool, args });
+    return response.data;
+  },
+
+  async webSearch(query: string) {
+    const response = await axios.post(`${API_BASE}/mcp/web_search`, { query });
+    return response.data;
+  },
+
+  async understandImage(prompt: string, imageUrl: string) {
+    const response = await axios.post(`${API_BASE}/mcp/understand_image`, { prompt, image_url: imageUrl });
+    return response.data;
+  },
 };
