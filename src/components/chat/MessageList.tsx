@@ -7,6 +7,7 @@ interface MessageListProps {
   messages: Message[];
   onRegenerate?: (messageId: string) => void;
   onDelete?: (messageId: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
   className?: string;
   isCompareMode?: boolean;
   isGenerating?: boolean;
@@ -16,6 +17,7 @@ export function MessageList({
   messages,
   onRegenerate,
   onDelete,
+  onEdit,
   className,
   isCompareMode = false,
   isGenerating = false,
@@ -102,6 +104,7 @@ export function MessageList({
                 : undefined
             }
             onDelete={onDelete ? () => onDelete(message.id) : undefined}
+            onEdit={onEdit && message.role === 'user' ? (content) => onEdit(message.id, content) : undefined}
           />
         ))}
         <div ref={bottomRef} className="h-4" />

@@ -1,12 +1,11 @@
 import { cn } from '@/utils/helpers';
-import { Bot, User, Copy, RotateCcw, Trash2, Check } from 'lucide-react';
-import { useState } from 'react';
+import { Copy, RotateCcw, Check, Send, X, Trash2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { Message } from '@/types';
-import { useSettingsStore } from '@/stores/settingsStore';
 
 import { TypingIndicator } from '../common/Loading';
 
@@ -15,6 +14,7 @@ interface MessageBubbleProps {
   onCopy?: () => void;
   onRegenerate?: () => void;
   onDelete?: () => void;
+  onEdit?: (newContent: string) => void;
   showActions?: boolean;
   className?: string;
 }
@@ -24,19 +24,54 @@ export function MessageBubble({
   onCopy,
   onRegenerate,
   onDelete,
+  onEdit,
   showActions = true,
   className,
 }: MessageBubbleProps) {
-  const { showTimestamps } = useSettingsStore();
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
+
+  useEffect(() => {
+    if (isEditing && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [isEditing]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     onCopy?.();
+  };
+
+  const handleEditStart = () => {
+    setEditContent(message.content);
+    setIsEditing(true);
+  };
+
+  const handleEditCancel = () => {
+    setIsEditing(false);
+    setEditContent(message.content);
+  };
+
+  const handleEditSubmit = () => {
+    if (editContent.trim() && onEdit) {
+      onEdit(editContent.trim());
+      setIsEditing(false);
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleEditSubmit();
+    } else if (e.key === 'Escape') {
+      handleEditCancel();
+    }
   };
 
   if (isSystem) {
@@ -57,37 +92,15 @@ export function MessageBubble({
         className
       )}
     >
-      {/* 头像 */}
-      <div
-        className={cn(
-          'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-          isUser ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-600'
-        )}
-      >
-        {isUser ? <User className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
-      </div>
-
       {/* 消息内容 */}
       <div className={cn('flex-1 max-w-[calc(100%-60px)]', isUser && 'text-right')}>
-        {/* 发送者信息 */}
-        <div className={cn('flex items-center gap-2 mb-1', isUser && 'justify-end')}>
-          <span className="text-sm font-medium text-gray-900">
-            {isUser ? '我' : message.modelId || 'AI'}
-          </span>
-          {showTimestamps && (
-            <span className="text-xs text-gray-400">
-              {new Date(message.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
-
         {/* 消息气泡 */}
         <div
           className={cn(
-            'inline-block text-left px-4 py-2.5 rounded-2xl',
+            'inline-block text-left px-4 py-3 rounded-xl border border-gray-200',
             isUser
-              ? 'bg-primary-600 text-white rounded-tr-sm'
-              : 'bg-white border border-gray-200 rounded-tl-sm',
+              ? 'bg-primary-600 text-white'
+              : 'bg-gray-100 text-gray-800',
             message.isError && 'bg-red-50 border-red-200 text-red-700'
           )}
         >
@@ -197,7 +210,7 @@ export function MessageBubble({
         </div>
 
         {/* 操作按钮 */}
-        {showActions && (
+        {showActions && !isEditing && (
           <div
             className={cn(
               'flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity',
@@ -211,6 +224,24 @@ export function MessageBubble({
             >
               {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
+            {isUser && onEdit && (
+              <button
+                onClick={handleEditStart}
+                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                title="修改"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {isUser && onDelete && (
+              <button
+                onClick={onDelete}
+                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                title="删除"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
             {!isUser && onRegenerate && (
               <button
                 onClick={onRegenerate}
@@ -220,15 +251,37 @@ export function MessageBubble({
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
             )}
-            {onDelete && (
+          </div>
+        )}
+
+        {/* 编辑输入框 */}
+        {isEditing && (
+          <div className="mt-2">
+            <textarea
+              ref={editInputRef}
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              onKeyDown={handleEditKeyDown}
+              rows={Math.max(2, editContent.split('\n').length)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-100 focus:border-primary-400 resize-none"
+            />
+            <div className="flex justify-end gap-2 mt-2">
               <button
-                onClick={onDelete}
-                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                title="删除"
+                onClick={handleEditCancel}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-1"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5" />
+                取消
               </button>
-            )}
+              <button
+                onClick={handleEditSubmit}
+                disabled={!editContent.trim()}
+                className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Send className="w-3.5 h-3.5" />
+                发送
+              </button>
+            </div>
           </div>
         )}
       </div>

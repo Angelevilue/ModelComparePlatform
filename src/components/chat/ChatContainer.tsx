@@ -24,7 +24,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
     clearMessages,
     setGenerating,
     createConversation,
-    setCurrentConversation 
+    setCurrentConversation,
+    deleteMessage 
   } = useChatStore();
   const { selectedModelIds, setSelectedModels, getConfigById } = useModelStore();
   
@@ -184,6 +185,141 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
     setCurrentConversation(newId);
   };
 
+  const handleDelete = useCallback((messageId: string) => {
+    const messageIndex = conversation.messages.findIndex((m) => m.id === messageId);
+    if (messageIndex < 0) return;
+
+    const message = conversation.messages[messageIndex];
+    
+    if (message.role === 'user') {
+      deleteMessage(conversationId, messageId);
+      const nextMessageIndex = messageIndex + 1;
+      if (nextMessageIndex < conversation.messages.length) {
+        const nextMessage = conversation.messages[nextMessageIndex];
+        if (nextMessage.role === 'assistant') {
+          deleteMessage(conversationId, nextMessage.id);
+        }
+      }
+    } else if (message.role === 'assistant') {
+      const prevMessageIndex = messageIndex - 1;
+      if (prevMessageIndex >= 0) {
+        const prevMessage = conversation.messages[prevMessageIndex];
+        if (prevMessage.role === 'user') {
+          deleteMessage(conversationId, prevMessage.id);
+        }
+      }
+      deleteMessage(conversationId, messageId);
+    }
+  }, [conversationId, conversation?.messages]);
+
+  const handleEdit = useCallback(async (messageId: string, newContent: string) => {
+    if (!modelConfig || !selectedModelId) return;
+
+    const messageIndex = conversation.messages.findIndex((m) => m.id === messageId);
+    if (messageIndex < 0) return;
+
+    updateMessage(conversationId, messageId, {
+      content: newContent,
+    });
+
+    const nextMessageIndex = messageIndex + 1;
+    if (nextMessageIndex >= conversation.messages.length) {
+      const assistantMessageId = addMessage(conversationId, {
+        role: 'assistant',
+        content: '',
+        modelId: modelConfig.name,
+        isStreaming: true,
+      });
+
+      setIsGenerating(true);
+      setGenerating(true);
+
+      const historyMessages = conversation.messages.slice(0, messageIndex + 1);
+      const messages = buildMessageHistory(historyMessages, systemPrompt);
+
+      let fullContent = '';
+      
+      await streamingManager.streamGenerate(
+        modelConfig,
+        messages,
+        conversationId,
+        assistantMessageId,
+        {
+          onToken: (token) => {
+            fullContent += token;
+            updateMessage(conversationId, assistantMessageId, {
+              content: fullContent,
+            });
+          },
+          onComplete: () => {
+            updateMessage(conversationId, assistantMessageId, {
+              isStreaming: false,
+            });
+            setIsGenerating(false);
+            setGenerating(false);
+          },
+          onError: (error) => {
+            updateMessage(conversationId, assistantMessageId, {
+              content: `错误: ${error.message}`,
+              isStreaming: false,
+              isError: true,
+            });
+            setIsGenerating(false);
+            setGenerating(false);
+          },
+        }
+      );
+    } else {
+      const nextMessage = conversation.messages[nextMessageIndex];
+      if (nextMessage.role === 'assistant') {
+        updateMessage(conversationId, nextMessage.id, {
+          content: '',
+          isStreaming: true,
+          isError: false,
+        });
+
+        setIsGenerating(true);
+        setGenerating(true);
+
+        const historyMessages = conversation.messages.slice(0, messageIndex + 1);
+        const messages = buildMessageHistory(historyMessages, systemPrompt);
+
+        let fullContent = '';
+        
+        await streamingManager.streamGenerate(
+          modelConfig,
+          messages,
+          conversationId,
+          nextMessage.id,
+          {
+            onToken: (token) => {
+              fullContent += token;
+              updateMessage(conversationId, nextMessage.id, {
+                content: fullContent,
+              });
+            },
+            onComplete: () => {
+              updateMessage(conversationId, nextMessage.id, {
+                isStreaming: false,
+              });
+              setIsGenerating(false);
+              setGenerating(false);
+            },
+            onError: (error) => {
+              updateMessage(conversationId, nextMessage.id, {
+                content: `错误: ${error.message}`,
+                isStreaming: false,
+                isError: true,
+              });
+              setIsGenerating(false);
+              setGenerating(false);
+            },
+          }
+        );
+      }
+    }
+  }, [conversationId, conversation?.messages, modelConfig, selectedModelId, systemPrompt]);
+
   return (
     <div className="flex-1 flex flex-col h-full bg-gray-50/50 relative">
       {/* 顶部工具栏 */}
@@ -230,9 +366,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         <MessageList
           messages={conversation.messages}
           onRegenerate={handleRegenerate}
-          onDelete={() => {
-            /* TODO: 实现删除 */
-          }}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
           isGenerating={isGenerating}
         />
       ) : (
