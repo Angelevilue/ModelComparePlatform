@@ -130,89 +130,58 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
   }, [conversationId]);
 
   const handleSend = useCallback(async (
-    content: string, 
+    content: string,
     attachments: Attachment[] = [],
     tool?: 'web_search' | 'understand_image' | null,
     toolArgs?: Record<string, string>
   ) => {
     if (!modelConfig || !selectedModelId) return;
 
-    // 如果启用了工具，先调用工具获取结果
-    if (tool) {
+    // 智能体模式 vs 聊天机器人模式
+    // 当用户选择了搜索工具时：启用智能体模式（enableTools=true），模型根据问题判断是否需要调用搜索
+    // 当用户没有选择搜索工具时：禁用工具调用（enableTools=false），模型是纯聊天机器人
+    // 识图工具由于需要先获取图片，仍走手动调用逻辑
+    const enableTools = tool === 'web_search';
+    console.log('[ChatContainer] handleSend enableTools:', enableTools, 'tool:', tool);
+
+    // 识图工具需要手动调用（因为需要先获取图片）
+    if (tool === 'understand_image') {
       setIsToolLoading(true);
 
       // 添加用户消息
       addMessage(conversationId, {
         role: 'user',
-        content: tool === 'web_search'
-          ? `搜索: ${toolArgs?.query || content}`
-          : `识图: ${toolArgs?.prompt || content}`,
+        content: content,
       });
 
       try {
-        let toolResult: string;
-        let rawResult: string = ''; // 原始搜索结果用于解析链接
+        const imageUrl = toolArgs?.image_source || '';
+        const prompt = toolArgs?.prompt || '描述这张图片';
+        const result = await apiService.understandImage(prompt, imageUrl);
+        const toolResult = formatImageResult(result);
 
-        if (tool === 'web_search') {
-          const query = toolArgs?.query || content;
-          const result = await apiService.webSearch(query);
-          // 提取原始搜索结果用于解析搜索链接
-          // MCP 返回格式可能是 { content: [{ type: 'text', text: '{"organic": [...]}' }] }
-          try {
-            if (Array.isArray(result) && result[0]?.content) {
-              const textContent = result[0].content[0]?.text;
-              if (textContent) {
-                rawResult = textContent; // 保存原始 JSON 字符串
-              }
-            } else if (result?.content) {
-              const textContent = result.content[0]?.text;
-              if (textContent) {
-                rawResult = textContent;
-              }
-            }
-          } catch (e) {
-            console.error('Failed to extract raw search result:', e);
-          }
-          toolResult = formatSearchResult(result);
-        } else if (tool === 'understand_image') {
-          const imageUrl = toolArgs?.image_source || '';
-          const prompt = toolArgs?.prompt || '描述这张图片';
-          const result = await apiService.understandImage(prompt, imageUrl);
-          toolResult = formatImageResult(result);
-        } else {
-          toolResult = '未知的工具';
-        }
-
-        // 现在将工具结果发送给模型，让模型基于结果回复
+        // 将工具结果发送给模型
         const messages = buildMessageHistory(conversation.messages, systemPrompt);
-
-        // 添加系统提示
         messages.unshift({
           role: 'system' as const,
-          content: '你是一个智能助手。请根据提供的工具搜索结果或图片理解结果来回答用户的问题。'
+          content: '你是一个智能助手。'
         });
-
-        // 添加用户的问题和工具结果
         messages.push({
           role: 'user' as const,
-          content: `用户的问题: ${content}\n\n工具返回的结果:\n${toolResult}\n\n请根据以上工具结果回答用户的问题。`
+          content: `用户的问题: ${content}\n\n图片理解结果:\n${toolResult}`
         });
 
-        // 创建助手消息，用于流式输出，并携带工具调用信息
         const toolCallId = `manual_${Date.now()}`;
         const assistantMessageId = addMessage(conversationId, {
           role: 'assistant',
           content: '',
           modelId: modelConfig.name,
           isStreaming: true,
-          // 将工具信息存储在 toolCallsInfo 中，用于前端显示搜索标签
           toolCallsInfo: [{
             id: toolCallId,
-            name: tool === 'web_search' ? 'web_search' : 'understand_image',
-            arguments: JSON.stringify(tool === 'web_search'
-              ? { query: toolArgs?.query || content }
-              : { prompt: toolArgs?.prompt || content, image_source: toolArgs?.image_source || '' }),
-            result: rawResult || toolResult
+            name: 'understand_image',
+            arguments: JSON.stringify({ prompt, image_source: imageUrl }),
+            result: toolResult
           }]
         });
 
@@ -221,7 +190,6 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         setGenerating(true);
 
         let fullContent = '';
-
         await streamingManager.streamGenerate(
           modelConfig,
           messages,
@@ -230,14 +198,10 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           {
             onToken: (token) => {
               fullContent += token;
-              updateMessage(conversationId, assistantMessageId, {
-                content: fullContent,
-              });
+              updateMessage(conversationId, assistantMessageId, { content: fullContent });
             },
             onComplete: () => {
-              updateMessage(conversationId, assistantMessageId, {
-                isStreaming: false,
-              });
+              updateMessage(conversationId, assistantMessageId, { isStreaming: false });
               setIsGenerating(false);
               setGenerating(false);
             },
@@ -251,21 +215,13 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
               setGenerating(false);
             },
           },
-          false  // 不需要再次调用工具
+          false
         );
-
       } catch (error) {
-        // 工具调用失败时，添加一条错误消息
         addMessage(conversationId, {
           role: 'assistant',
           content: `工具调用失败: ${error instanceof Error ? error.message : '未知错误'}`,
           isError: true,
-          toolCallsInfo: [{
-            id: `error_${Date.now()}`,
-            name: tool === 'web_search' ? 'web_search' : 'understand_image',
-            arguments: JSON.stringify({}),
-            result: `错误: ${error instanceof Error ? error.message : '未知错误'}`
-          }]
         });
       } finally {
         setIsToolLoading(false);
@@ -273,10 +229,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
       return;
     }
 
-    // 普通消息处理 - 启用自动工具调用（让模型决定是否使用工具）
-    // 如果用户明确选择了工具，使用手动模式（上面的逻辑）
-    const enableTools = true; // 默认启用自动工具调用
-    console.log('[ChatContainer] handleSend enableTools:', enableTools, 'tool:', tool);
+    // 搜索工具：走智能体模式，让模型自己判断是否需要搜索
+    // 没有选择任何工具：走聊天模式，禁用工具调用
     
     let messageContent = content;
     
@@ -329,12 +283,32 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
     if (enableTools) {
       messages.unshift({
         role: 'system' as const,
-        content: `你是一个智能助手。你可以使用以下工具来帮助回答用户的问题：
+        content: `你是一个智能助手。你可以使用 web_search 工具来搜索网络信息，但你需要根据问题内容自行判断是否真的需要调用搜索工具。
 
-1. web_search - 搜索网络获取最新信息。当用户询问实时信息、新闻、天气、股价等时，请主动使用此工具。
-2. understand_image - 分析图片内容。当用户上传图片并询问图片相关内容时使用。
+【不需要调用搜索工具的情况 - 直接回答】
+- 常识性问题：如"太阳从哪边升起"、"水的沸点是多少"等
+- 通用知识：如历史事件、科学原理、地理概念等已知的知识
+- 计算问题：如数学计算、代码编写等
+- 解释概念：如"什么是人工智能"、"Python 是什么"
+- 闲聊对话：如打招呼、询问天气（如果你知道所在地区可以回答）
+- 你有十足把握回答的问题
 
-使用工具的格式是通过返回 tool_calls 来调用工具，而不是在文本中描述你会调用工具。`
+【需要调用搜索工具的情况 - 必须搜索】
+- 实时信息：如今天新闻、天气、股价
+- 最新事件：如刚发生的事、发布会、新产品
+- 特定数据：如2024年GDP、最新的技术排名
+- 不确定的事实：如某个人的生平、某个公司的最新动态
+- 专业领域的最新发展
+
+【重要判断规则】
+1. 先思考你是否能准确回答这个问题
+2. 如果你有80%以上把握能准确回答，直接回答，不需要搜索
+3. 如果你没有把握或不确定，一定要搜索，不要乱回答
+4. 搜索结果不理想时，可以多次搜索优化结果
+
+【回答要求】
+- 回答时直接给出答案，不要以"根据搜索结果"开头
+- 使用工具的格式是通过返回 tool_calls 来调用工具`
       });
     }
     
