@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, X, CornerDownLeft, Command, Bot, Paperclip, Square } from 'lucide-react';
+import { Send, X, CornerDownLeft, Command, Bot, Paperclip, Square, Globe, Image, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { FileAttachment, Attachment } from './FileAttachment';
 import { AgentConfigButton } from './AgentConfigButton';
 
+type MCPTool = 'web_search' | 'understand_image' | null;
+
 interface ChatInputProps {
-  onSend: (message: string, attachments: Attachment[]) => void;
+  onSend: (message: string, attachments: Attachment[], tool?: MCPTool, toolArgs?: Record<string, string>) => void;
   onCancel?: () => void;
   isLoading?: boolean;
+  isToolLoading?: boolean;
   placeholder?: string;
   disabled?: boolean;
   modelName?: string;
@@ -21,6 +24,7 @@ export function ChatInput({
   onSend,
   onCancel,
   isLoading = false,
+  isToolLoading = false,
   placeholder = '输入消息...',
   disabled = false,
   modelName,
@@ -30,6 +34,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [selectedTool, setSelectedTool] = useState<MCPTool>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { enterToSend } = useSettingsStore();
   const [isFocused, setIsFocused] = useState(false);
@@ -61,15 +66,37 @@ export function ChatInput({
   }, [input]);
 
   const handleSend = useCallback(() => {
-    if ((!input.trim() && attachments.length === 0) || isLoading || disabled) return;
-    onSend(input.trim(), attachments);
+    console.log('[ChatInput] selectedTool:', selectedTool, 'input:', input.trim(), 'attachments:', attachments.length);
+
+    // 检查是否有图片附件
+    const imageAttachments = attachments.filter(a => a.type.startsWith('image/'));
+    const hasImageAttachment = imageAttachments.length > 0;
+
+    // 确定使用哪个工具：如果有图片附件，自动使用 understand_image
+    const toolToUse: MCPTool = hasImageAttachment ? 'understand_image' : selectedTool;
+
+    if ((!input.trim() && attachments.length === 0 && !toolToUse) || isLoading || disabled) return;
+
+    const toolArgs: Record<string, string> = {};
+    if (toolToUse === 'web_search') {
+      toolArgs.query = input.trim();
+    } else if (toolToUse === 'understand_image') {
+      // 使用图片附件的 base64 内容
+      toolArgs.image_source = hasImageAttachment
+        ? (imageAttachments[0].content || imageAttachments[0].url || '')
+        : '';
+    }
+
+    console.log('[ChatInput] Calling onSend, tool:', toolToUse, 'hasImageAttachment:', hasImageAttachment);
+    onSend(input.trim(), attachments, toolToUse, toolArgs);
     setInput('');
     setAttachments([]);
+    // 不重置 selectedTool，让用户保持工具选择状态
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
     }
-  }, [input, attachments, isLoading, disabled, onSend]);
+  }, [input, attachments, isLoading, disabled, onSend, selectedTool]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -98,6 +125,67 @@ export function ChatInput({
 
   const charCount = input.length;
   const isOverLimit = charCount > 4000;
+
+  // 监听粘贴事件，支持粘贴图片
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (disabled || isLoading) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          // 检查数量限制
+          if (attachments.length >= 5) {
+            alert('最多只能上传 5 个文件');
+            return;
+          }
+
+          // 检查文件大小（最大 5MB）
+          if (file.size > 5 * 1024 * 1024) {
+            alert('图片超过 5MB 限制');
+            return;
+          }
+
+          // 读取图片内容为 base64
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            const newAttachment: Attachment = {
+              id: `paste-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: file.name || `screenshot-${Date.now()}.png`,
+              size: file.size,
+              type: file.type || 'image/png',
+              content: base64,
+              url: base64, // 图片预览 URL
+            };
+            // 使用函数式更新确保获取最新的 attachments
+            setAttachments(prev => [...prev, newAttachment]);
+          };
+          reader.readAsDataURL(file);
+
+          return; // 只处理第一张图片
+        }
+      }
+    };
+
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.addEventListener('paste', handlePaste);
+    }
+
+    return () => {
+      if (textarea) {
+        textarea.removeEventListener('paste', handlePaste);
+      }
+    };
+  }, [disabled, isLoading, attachments]);
 
   return (
     <div
@@ -180,7 +268,7 @@ export function ChatInput({
       {/* 底部工具栏 */}
       <div className="flex items-center justify-between px-3 py-2">
         {/* 左侧：功能按钮 + 快捷键提示 */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0 flex-nowrap">
           {/* 文件上传按钮（当没有附件时显示） */}
           {attachments.length === 0 && (
             <FileAttachment
@@ -189,17 +277,58 @@ export function ChatInput({
               disabled={disabled || isLoading}
             />
           )}
-          
+
           {/* 子代理配置按钮 */}
           {onSelectAgent && (
-            <AgentConfigButton 
+            <AgentConfigButton
               onSelectAgent={handleSelectAgent}
               disabled={disabled || isLoading}
             />
           )}
 
+          {/* MCP 工具选择器 */}
+          {(isLoading || isToolLoading) ? (
+            <div className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 bg-gray-50 rounded-lg">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>{selectedTool === 'web_search' ? '搜索中...' : selectedTool === 'understand_image' ? '识别中...' : '处理中...'}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 flex-nowrap">
+              <button
+                type="button"
+                onClick={() => setSelectedTool(selectedTool === 'web_search' ? null : 'web_search')}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors whitespace-nowrap',
+                  selectedTool === 'web_search'
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                    : 'text-gray-500 hover:bg-gray-100 border border-transparent'
+                )}
+                disabled={disabled || isLoading}
+                title="网络搜索"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>搜索</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTool(selectedTool === 'understand_image' ? null : 'understand_image')}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors whitespace-nowrap',
+                  selectedTool === 'understand_image'
+                    ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                    : 'text-gray-500 hover:bg-gray-100 border border-transparent'
+                )}
+                disabled={disabled || isLoading}
+                title="图片理解"
+              >
+                <Image className="w-3.5 h-3.5" />
+                <span>识图</span>
+              </button>
+            </div>
+          )}
+
           <div className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
-          
+
           {/* 快捷键提示 */}
           <div className="hidden sm:flex items-center gap-3 text-xs text-gray-400 flex-shrink-0">
             <span className="flex items-center gap-1">
@@ -250,10 +379,10 @@ export function ChatInput({
           ) : (
             <button
               onClick={handleSend}
-              disabled={(!input.trim() && attachments.length === 0) || isLoading || disabled || isOverLimit}
+              disabled={(!input.trim() && attachments.length === 0 && !selectedTool) || isLoading || disabled || isOverLimit}
               className={cn(
                 'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                (input.trim() || attachments.length > 0) && !isLoading && !disabled && !isOverLimit
+                (input.trim() || attachments.length > 0 || selectedTool) && !isLoading && !disabled && !isOverLimit
                   ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm hover:shadow'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               )}

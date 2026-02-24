@@ -85,7 +85,7 @@ export function MessageList({
     );
   }
 
-  // 过滤掉系统消息，由 MessageBubble 单独渲染
+  // 过滤掉系统消息，保留工具调用消息用于提取 toolCallsInfo
   const displayMessages = messages.filter((m) => m.role !== 'system');
 
   return (

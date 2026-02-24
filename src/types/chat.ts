@@ -1,5 +1,5 @@
 // 消息角色
-export type MessageRole = 'user' | 'assistant' | 'system';
+export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
 // 消息对象
 export interface Message {
@@ -11,6 +11,15 @@ export interface Message {
   panelIndex?: number; // 对比模式下面板的索引
   isError?: boolean;
   isStreaming?: boolean;
+  toolCallsInfo?: ToolCallInfo[]; // 工具调用信息
+}
+
+// 工具调用信息
+export interface ToolCallInfo {
+  id: string;
+  name: string;
+  arguments: string;
+  result?: string;
 }
 
 // 对话会话

@@ -29,7 +29,7 @@ pool.connect((err, client, release) => {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // 配置文件路径（备用）
 const configDir = path.join(__dirname, 'config');
@@ -298,6 +298,132 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// ==================== MCP 代理 ====================
+
+const http = require('http');
+
+function forwardMCPRequest(method, body = null) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const options = {
+      hostname: 'localhost',
+      port: 3002,
+      path: method,
+      method: body ? 'POST' : 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      let responseData = '';
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(responseData));
+        } catch {
+          resolve(responseData);
+        }
+      });
+    });
+
+    req.on('error', reject);
+    
+    if (data) {
+      req.write(data);
+    }
+    req.end();
+  });
+}
+
+// 初始化 MCP 服务
+let mcpInitInProgress = false;
+
+app.post('/api/mcp/init', async (req, res) => {
+  if (mcpInitInProgress) {
+    return res.json({ success: true, ready: true, message: 'Initialization already in progress' });
+  }
+  
+  mcpInitInProgress = true;
+  try {
+    const result = await forwardMCPRequest('/init', {});
+    res.json(result);
+  } catch (error) {
+    console.error('MCP init error:', error.message);
+    res.status(500).json({ error: 'Failed to initialize MCP: ' + error.message });
+  } finally {
+    mcpInitInProgress = false;
+  }
+});
+
+// 获取 MCP 状态
+app.get('/api/mcp/health', async (req, res) => {
+  try {
+    const result = await forwardMCPRequest('/health');
+    res.json(result);
+  } catch (error) {
+    res.json({ status: 'not_running', error: error.message });
+  }
+});
+
+// 获取 MCP 工具列表
+app.get('/api/mcp/tools', async (req, res) => {
+  try {
+    const result = await forwardMCPRequest('/tools');
+    res.json(result);
+  } catch (error) {
+    console.error('MCP tools error:', error.message);
+    res.status(500).json({ error: 'Failed to get tools: ' + error.message });
+  }
+});
+
+// 调用 MCP 工具
+app.post('/api/mcp/call', async (req, res) => {
+  try {
+    const { tool, args } = req.body;
+    const result = await forwardMCPRequest('/tools/call', { name: tool, arguments: args });
+    res.json(result);
+  } catch (error) {
+    console.error('MCP call error:', error.message);
+    res.status(500).json({ error: 'Failed to call tool: ' + error.message });
+  }
+});
+
+// 网络搜索
+app.post('/api/mcp/web_search', async (req, res) => {
+  try {
+    const { query } = req.body;
+    const result = await forwardMCPRequest('/web_search', { query });
+    res.json(result);
+  } catch (error) {
+    console.error('Web search error:', error.message);
+    res.status(500).json({ error: 'Failed to search: ' + error.message });
+  }
+});
+
+// 图片理解
+app.post('/api/mcp/understand_image', async (req, res) => {
+  try {
+    const { prompt, image_source } = req.body;
+    const result = await forwardMCPRequest('/understand_image', { prompt, image_source });
+    res.json(result);
+  } catch (error) {
+    console.error('Understand image error:', error.message);
+    res.status(500).json({ error: 'Failed to understand image: ' + error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`API Server running on http://localhost:${PORT}`);
+});
+
+// 防止进程崩溃
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
 });

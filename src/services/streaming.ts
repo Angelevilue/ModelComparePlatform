@@ -1,42 +1,145 @@
-import { createChatCompletionStream } from './openai';
-import type { ModelConfig, Message } from '@/types';
+import { createChatCompletionStream, callMCPTool, getMCPTools } from './openai';
+import type { ModelConfig, Message, Tool } from '@/types';
 
 export interface StreamHandler {
   onToken: (token: string) => void;
   onComplete: () => void;
   onError: (error: Error) => void;
+  onToolCall?: (toolCalls: { id: string; name: string; arguments: string; result: string }[]) => void;
 }
+
+type ChatMessage = { role: 'system' | 'user' | 'assistant' | 'tool'; content: string | null; tool_calls?: any[]; tool_call_id?: string };
 
 // 流式生成管理器
 export class StreamingManager {
   private abortControllers: Map<string, AbortController> = new Map();
   private isCancelled: Set<string> = new Set();
 
-  // 开始流式生成
+  // 开始流式生成（支持工具调用）
   async streamGenerate(
     modelConfig: ModelConfig,
     messages: { role: 'system' | 'user' | 'assistant'; content: string }[],
     conversationId: string,
     messageId: string,
-    handler: StreamHandler
+    handler: StreamHandler,
+    enableTools: boolean = false
   ): Promise<void> {
+    console.log('[StreamingManager] streamGenerate called, enableTools:', enableTools);
     const key = `${conversationId}-${messageId}`;
     
     if (this.isCancelled.has(key)) {
       return;
     }
 
+    let tools: Tool[] = [];
+    if (enableTools) {
+      tools = await getMCPTools();
+      console.log('[Stream] Tools loaded:', tools.map(t => t.function.name));
+    }
+
+    // 构建当前消息列表（用于工具调用循环）
+    let currentMessages: ChatMessage[] = [...messages] as ChatMessage[];
+    console.log('[Stream] Messages:', currentMessages.length);
+    console.log('[Stream] Enable tools:', enableTools);
+    let hasToolCalls = true;
+    let maxToolCalls = 5; // 最多调用5次工具，防止无限循环
+
     try {
-      const stream = createChatCompletionStream(modelConfig, messages);
-      
-      for await (const token of stream) {
-        if (this.isCancelled.has(key)) {
+      while (hasToolCalls && maxToolCalls > 0) {
+        hasToolCalls = false;
+        
+        const stream = createChatCompletionStream(modelConfig, currentMessages as any, tools);
+        let fullContent = '';
+        let toolCalls: { index?: number; id: string | null; type: string | null; function: { name: string; arguments: string } }[] = [];
+        
+        for await (const chunk of stream) {
+          if (this.isCancelled.has(key)) {
+            return;
+          }
+
+          if (chunk.type === 'content' && chunk.content) {
+            fullContent += chunk.content;
+            handler.onToken(chunk.content);
+          } else if (chunk.type === 'tool_calls' && chunk.tool_calls) {
+            console.log('[Stream] Tool calls received:', chunk.tool_calls);
+            toolCalls = chunk.tool_calls;
+          }
+        }
+
+        console.log('[Stream] Final tool calls:', toolCalls.length);
+
+        // 检查是否有工具调用
+        if (toolCalls.length > 0 && !this.isCancelled.has(key)) {
+          hasToolCalls = true;
+          maxToolCalls--;
+
+          // 将助手的工具调用添加到消息历史
+          // 注意：当有 tool_calls 时，content 应该为空或 null
+          currentMessages.push({
+            role: 'assistant' as const,
+            content: fullContent || null,
+            tool_calls: toolCalls.map(tc => ({
+              id: tc.id || `temp_${tc.index}`,
+              type: 'function' as const,
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments
+              }
+            }))
+          });
+
+          // 执行工具调用并添加结果到消息历史
+          const toolCallResults: { id: string; name: string; arguments: string; result: string }[] = [];
+          
+          for (const toolCall of toolCalls) {
+            try {
+              const args = JSON.parse(toolCall.function.arguments || '{}');
+              const result = await callMCPTool(toolCall.function.name, args);
+              
+              toolCallResults.push({
+                id: toolCall.id || `temp_${toolCall.index}`,
+                name: toolCall.function.name,
+                arguments: JSON.stringify(args),
+                result: result
+              });
+              
+              currentMessages.push({
+                role: 'tool' as const,
+                content: result,
+                tool_call_id: toolCall.id || undefined
+              });
+            } catch (e) {
+              console.error('Tool call error:', e);
+              const errorResult = `工具调用失败: ${e instanceof Error ? e.message : '未知错误'}`;
+              toolCallResults.push({
+                id: toolCall.id || `temp_${toolCall.index}`,
+                name: toolCall.function.name,
+                arguments: JSON.stringify({}),
+                result: errorResult
+              });
+              currentMessages.push({
+                role: 'tool' as const,
+                content: errorResult,
+                tool_call_id: toolCall.id || undefined
+              });
+            }
+          }
+          
+          // 通知有工具调用
+          if (handler.onToolCall && toolCallResults.length > 0) {
+            handler.onToolCall(toolCallResults);
+          }
+        } else {
+          // 没有更多工具调用，生成完成
+          if (!this.isCancelled.has(key)) {
+            handler.onComplete();
+          }
           break;
         }
-        handler.onToken(token);
       }
 
-      if (!this.isCancelled.has(key)) {
+      if (maxToolCalls <= 0 && hasToolCalls) {
+        handler.onToken('\n\n[已达到最大工具调用次数]');
         handler.onComplete();
       }
     } catch (error) {
@@ -128,8 +231,8 @@ export function buildMessageHistory(
   for (const msg of contextMessages) {
     if (msg.role !== 'system') {
       result.push({
-        role: msg.role,
-        content: msg.content,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content || '',
       });
     }
   }
