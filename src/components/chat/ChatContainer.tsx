@@ -119,28 +119,39 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
     // 如果启用了工具，先调用工具获取结果
     if (tool) {
       setIsToolLoading(true);
-      
+
       // 添加用户消息
       addMessage(conversationId, {
         role: 'user',
-        content: tool === 'web_search' 
+        content: tool === 'web_search'
           ? `搜索: ${toolArgs?.query || content}`
           : `识图: ${toolArgs?.prompt || content}`,
       });
 
-      // 添加工具调用中的提示消息
-      const toolMessageId = addMessage(conversationId, {
-        role: 'assistant',
-        content: tool === 'web_search' ? '🔍 正在搜索...' : '🖼️ 正在识别图片...',
-        isStreaming: true,
-      });
-
       try {
         let toolResult: string;
-        
+        let rawResult: string = ''; // 原始搜索结果用于解析链接
+
         if (tool === 'web_search') {
           const query = toolArgs?.query || content;
           const result = await apiService.webSearch(query);
+          // 提取原始搜索结果用于解析搜索链接
+          // MCP 返回格式可能是 { content: [{ type: 'text', text: '{"organic": [...]}' }] }
+          try {
+            if (Array.isArray(result) && result[0]?.content) {
+              const textContent = result[0].content[0]?.text;
+              if (textContent) {
+                rawResult = textContent; // 保存原始 JSON 字符串
+              }
+            } else if (result?.content) {
+              const textContent = result.content[0]?.text;
+              if (textContent) {
+                rawResult = textContent;
+              }
+            }
+          } catch (e) {
+            console.error('Failed to extract raw search result:', e);
+          }
           toolResult = formatSearchResult(result);
         } else if (tool === 'understand_image') {
           const imageUrl = toolArgs?.image_source || '';
@@ -151,15 +162,9 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           toolResult = '未知的工具';
         }
 
-        // 更新工具消息
-        updateMessage(conversationId, toolMessageId, {
-          content: toolResult,
-          isStreaming: false,
-        });
-
         // 现在将工具结果发送给模型，让模型基于结果回复
         const messages = buildMessageHistory(conversation.messages, systemPrompt);
-        
+
         // 添加系统提示
         messages.unshift({
           role: 'system' as const,
@@ -167,17 +172,27 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         });
 
         // 添加用户的问题和工具结果
-        messages.push({ 
-          role: 'user' as const, 
-          content: `用户的问题: ${content}\n\n工具返回的结果:\n${toolResult}\n\n请根据以上工具结果回答用户的问题。` 
+        messages.push({
+          role: 'user' as const,
+          content: `用户的问题: ${content}\n\n工具返回的结果:\n${toolResult}\n\n请根据以上工具结果回答用户的问题。`
         });
 
-        // 创建助手消息用于流式输出
+        // 创建助手消息，用于流式输出，并携带工具调用信息
+        const toolCallId = `manual_${Date.now()}`;
         const assistantMessageId = addMessage(conversationId, {
           role: 'assistant',
           content: '',
           modelId: modelConfig.name,
           isStreaming: true,
+          // 将工具信息存储在 toolCallsInfo 中，用于前端显示搜索标签
+          toolCallsInfo: [{
+            id: toolCallId,
+            name: tool === 'web_search' ? 'web_search' : 'understand_image',
+            arguments: JSON.stringify(tool === 'web_search'
+              ? { query: toolArgs?.query || content }
+              : { prompt: toolArgs?.prompt || content, image_source: toolArgs?.image_source || '' }),
+            result: rawResult || toolResult
+          }]
         });
 
         currentMessageIdRef.current = assistantMessageId;
@@ -185,7 +200,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         setGenerating(true);
 
         let fullContent = '';
-        
+
         await streamingManager.streamGenerate(
           modelConfig,
           messages,
@@ -219,10 +234,17 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         );
 
       } catch (error) {
-        updateMessage(conversationId, toolMessageId, {
+        // 工具调用失败时，添加一条错误消息
+        addMessage(conversationId, {
+          role: 'assistant',
           content: `工具调用失败: ${error instanceof Error ? error.message : '未知错误'}`,
-          isStreaming: false,
           isError: true,
+          toolCallsInfo: [{
+            id: `error_${Date.now()}`,
+            name: tool === 'web_search' ? 'web_search' : 'understand_image',
+            arguments: JSON.stringify({}),
+            result: `错误: ${error instanceof Error ? error.message : '未知错误'}`
+          }]
         });
       } finally {
         setIsToolLoading(false);
@@ -334,13 +356,15 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           console.log('[ChatContainer] Tool calls executed:', toolCalls);
           toolCallsResult = toolCalls;
           
-          // 为每个工具调用添加一条工具消息显示搜索结果
-          for (const tc of toolCalls) {
-            addMessage(conversationId, {
-              role: 'tool',
-              content: tc.result,
-            });
-          }
+          // 将工具结果存储在助手消息的 toolCallsInfo 中，而不是单独添加 tool 消息
+          updateMessage(conversationId, assistantMessageId, {
+            toolCallsInfo: toolCalls.map(tc => ({
+              id: tc.id,
+              name: tc.name,
+              arguments: tc.arguments,
+              result: tc.result,
+            })),
+          });
         },
       },
       enableTools  // 启用工具调用
