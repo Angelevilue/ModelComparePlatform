@@ -1,253 +1,253 @@
-# ModelCompare - 模型回答对比平台
+# ModelCompare - AI Model Answer Comparison Platform
 
-一个支持单模型对话和多模型对比的交互式平台，帮助用户对比不同AI模型的回答效果。支持Web端和Electron桌面端，实现多端数据同步。
+An interactive platform supporting single-model chat and multi-model comparison, helping users compare responses from different AI models. Supports Web and Electron desktop clients with multi-end data synchronization.
 
-## 功能特性
+## Features
 
-### 核心功能
-- **单模型对话模式**：与单个AI模型进行连续对话
-- **多模型对比模式**：同时对比 2-4 个模型的回答
-- **流式响应**：AI回答逐字显示，提供更好的用户体验
-- **系统提示词**：支持自定义系统提示词，可保存为模板
-- **消息编辑**：支持修改和删除对话消息
-- **取消生成**：生成过程中可随时点击停止按钮取消生成
-- **对话分享**：支持生成分享链接，可分享对话内容给他人
-- **上下文限制**：自动限制为最近10轮对话，减少token消耗
-- **智能体模式**：选择搜索工具后，模型可自主判断是否需要搜索网络
-- **图像理解**：支持粘贴图片或上传图片，让模型理解图片内容
+### Core Features
+- **Single Model Chat Mode**: Continuous conversation with a single AI model
+- **Multi-Model Comparison Mode**: Compare responses from 2-4 models simultaneously
+- **Streaming Responses**: AI answers appear word-by-word for better UX
+- **System Prompts**: Custom system prompts with template saving support
+- **Message Editing**: Edit and delete conversation messages
+- **Cancel Generation**: Stop generation mid-process at any time
+- **Conversation Sharing**: Generate shareable links to share conversations
+- **Context Limitation**: Automatically limited to last 10 conversation rounds to reduce token usage
+- **Agent Mode**: When search tool is selected, model autonomously decides when to search the web
+- **Image Understanding**: Support pasting or uploading images for model to analyze
 
-### 模型管理
-- 支持多种模型提供商：OpenAI、Anthropic、Google、智谱AI、阿里云、硅基流动等
-- 支持自定义模型配置（Base URL、API Key、模型参数等）
-- 模型参数可调：temperature、max_tokens、top_p
-- 本地模型支持（通过 OpenAI 兼容接口）
-- 配置数据同步：Web端和桌面端共享同一配置文件
-- **MCP 工具支持**：通过 Model Context Protocol 扩展 AI 能力，支持网络搜索、代码执行等
+### Model Management
+- Support for multiple model providers: OpenAI, Anthropic, Google, Zhipu AI, Alibaba Cloud, SiliconFlow, etc.
+- Custom model configuration (Base URL, API Key, model parameters)
+- Adjustable model parameters: temperature, max_tokens, top_p
+- Local model support (via OpenAI compatible interface)
+- Configuration sync: Web and desktop clients share the same config file
+- **MCP Tool Support**: Extend AI capabilities via Model Context Protocol, supporting web search, code execution, etc.
 
-### 界面特性
-- Markdown 渲染支持（代码块、表格、列表等）
-- 代码语法高亮
-- 响应式设计
-- 快捷键支持
-- 消息复制、重新生成、修改、删除
-- 侧边栏隐藏/展开
-- 输入框智能聚焦：生成完成后自动聚焦输入框
-- 刷新页面保持当前对话和历史记录
-- **图片粘贴/上传**：支持 Ctrl+V 粘贴图片或点击上传按钮
-- **智能滚动**：生成内容时自动滚动到底部，用户手动滚动时暂停
-- **子代理选择**：内置多种专业代理（文档专家、代码专家、翻译专家等）
+### Interface Features
+- Markdown rendering support (code blocks, tables, lists, etc.)
+- Code syntax highlighting
+- Responsive design
+- Keyboard shortcuts
+- Message copy, regenerate, edit, delete
+- Sidebar collapse/expand
+- Smart input focus: Auto-focus input after generation completes
+- Persist current conversation and history on page refresh
+- **Image Paste/Upload**: Support Ctrl+V to paste images or click upload button
+- **Smart Scrolling**: Auto-scroll to bottom during generation, pause when user scrolls manually
+- **Sub-Agent Selection**: Built-in professional agents (document expert, code expert, translator, etc.)
 
-## 技术栈
+## Tech Stack
 
-- **框架**: React 18 + TypeScript
-- **桌面应用**: Electron
-- **后端服务**: Express + Node.js
-- **数据库**: PostgreSQL 16 (Docker)
-- **构建工具**: Vite
-- **样式**: TailwindCSS
-- **状态管理**: Zustand
-- **Markdown渲染**: react-markdown + remark-gfm
-- **代码高亮**: react-syntax-highlighter
-- **图标**: lucide-react
+- **Framework**: React 18 + TypeScript
+- **Desktop App**: Electron
+- **Backend**: Express + Node.js
+- **Database**: PostgreSQL 16 (Docker)
+- **Build Tool**: Vite
+- **Styling**: TailwindCSS
+- **State Management**: Zustand
+- **Markdown Rendering**: react-markdown + remark-gfm
+- **Code Highlighting**: react-syntax-highlighter
+- **Icons**: lucide-react
 
-## 快速开始
+## Quick Start
 
-### 安装依赖
+### Install Dependencies
 ```bash
 npm install
 ```
 
-### 启动 PostgreSQL 数据库
+### Start PostgreSQL Database
 ```bash
 npm run db:start
 ```
-首次启动会自动创建数据库表结构。详细使用方法请查看 [PostgreSQL 数据库使用指南](docs/database.md)。
+Database tables will be created automatically on first launch. See [PostgreSQL Database Guide](docs/database.md) for detailed usage.
 
-### Web 开发模式
+### Web Development Mode
 ```bash
 npm run dev
 ```
 
-### 后端 + Web 开发模式（推荐）
+### Backend + Web Development Mode (Recommended)
 ```bash
 npm run dev:all
 ```
-这会同时启动后端API服务(3001端口)和前端开发服务器(5186端口)
+This starts both the backend API service (port 3001) and frontend dev server (port 5186)
 
-### Electron 桌面开发模式
+### Electron Desktop Development Mode
 ```bash
 npm run electron:dev
 ```
-这会同时启动后端服务、前端服务器和Electron桌面应用
+This starts the backend service, frontend server, and Electron desktop app
 
-### 构建
+### Build
 ```bash
-# 构建 Web 版本
+# Build Web version
 npm run build
 
-# 构建 Electron 桌面应用
+# Build Electron Desktop App
 npm run electron:build:mac   # macOS
 npm run electron:build:win   # Windows
 ```
 
-## 使用说明
+## Usage Guide
 
-### 1. 配置模型
-1. 点击侧边栏的"设置"按钮
-2. 在"模型配置"标签页中添加你的模型
-3. 输入模型名称、API Key 和 Base URL
-4. 支持的提供商包括：OpenAI、Anthropic、Google、智谱AI、阿里云、硅基流动、自定义
+### 1. Configure Models
+1. Click the "Settings" button in the sidebar
+2. Add your model in the "Model Configuration" tab
+3. Enter model name, API Key, and Base URL
+4. Supported providers: OpenAI, Anthropic, Google, Zhipu AI, Alibaba Cloud, SiliconFlow, Custom
 
-### 2. 单模型对话
-1. 点击"新对话"按钮
-2. 选择要使用的模型
-3. 输入系统提示词（可选）
-4. 开始对话
+### 2. Single Model Chat
+1. Click the "New Chat" button
+2. Select the model to use
+3. Enter system prompt (optional)
+4. Start chatting
 
-### 3. 模型对比
-1. 点击"模型对比"按钮
-2. 选择 2-4 个要对比的模型
-3. 输入系统提示词（可选，可为每个模型单独设置）
-4. 输入问题，所有模型将同时回答
+### 3. Model Comparison
+1. Click the "Model Comparison" button
+2. Select 2-4 models to compare
+3. Enter system prompt (optional, can be set individually for each model)
+4. Enter your question, all models will answer simultaneously
 
-### 4. 消息操作
-- **修改消息**：点击用户消息下方的修改按钮，可以重新编辑问题并重新生成回答
-- **删除消息**：点击用户消息下方的删除按钮，删除该问题及对应的回答
-- **取消生成**：生成过程中点击红色"停止"按钮可取消当前生成
-- **分享对话**：点击右上角分享按钮，选择要分享的消息，生成链接后可分享给他人
+### 4. Message Operations
+- **Edit Message**: Click the edit button below user messages to edit and regenerate
+- **Delete Message**: Click the delete button below user messages to delete the question and its answer
+- **Cancel Generation**: Click the red "Stop" button during generation to cancel
+- **Share Conversation**: Click the share button in the top right, select messages to share, generate a link to share with others
 
-### 5. 工具使用
-- **网络搜索**：点击输入框上方的搜索图标启用搜索工具，模型将自主判断何时需要搜索网络
-- **图像理解**：支持两种方式：
-  - 直接 Ctrl+V 粘贴剪贴板中的图片
-  - 点击上传按钮选择图片文件
-- **子代理**：点击"代理"按钮选择专业代理，如代码专家、文档专家、翻译专家等
+### 5. Tool Usage
+- **Web Search**: Click the search icon above the input to enable search tool. The model will autonomously decide when to search the web
+- **Image Understanding**: Two methods supported:
+  - Ctrl+V directly to paste image from clipboard
+  - Click upload button to select image file
+- **Sub-Agents**: Click the "Agent" button to select professional agents like code expert, document expert, translator, etc.
 
-### 6. 滚动行为
-- 发送新问题时，窗口自动滚动到底部
-- 生成过程中持续自动滚动显示新内容
-- 用户手动向上滚动查看历史消息时，自动滚动暂停
-- 停止手动滚动 1.5 秒后恢复自动滚动
+### 6. Scroll Behavior
+- When sending a new question, window auto-scrolls to bottom
+- Auto-scrolls continuously during generation to show new content
+- Auto-scroll pauses when user manually scrolls up to view history
+- Auto-scroll resumes 1.5 seconds after user stops manual scrolling
 
-### 7. 侧边栏操作
-- 点击侧边栏顶部的隐藏按钮可以收起侧边栏
-- 点击左侧边缘的展开按钮可以展开侧边栏
+### 7. Sidebar Operations
+- Click the collapse button at the top of sidebar to hide the sidebar
+- Click the expand button on the left edge to expand the sidebar
 
-### 快捷键
-- `Ctrl/Cmd + Enter`: 发送消息
-- `Ctrl/Cmd + Shift + Enter`: 换行
-- `Ctrl/Cmd + N`: 新建对话
-- `Esc`: 取消生成 / 关闭弹窗
+### Keyboard Shortcuts
+- `Ctrl/Cmd + Enter`: Send message
+- `Ctrl/Cmd + Shift + Enter`: New line
+- `Ctrl/Cmd + N`: New conversation
+- `Esc`: Cancel generation / Close modal
 
-## 项目结构
+## Project Structure
 
 ```
 ModelComparePlatform/
-├── src/                          # 前端源代码
-│   ├── components/               # React 组件
-│   │   ├── chat/                 # 聊天相关组件
-│   │   │   ├── ChatContainer.tsx    # 聊天容器（含取消生成逻辑）
-│   │   │   ├── ChatInput.tsx        # 输入框组件（含停止按钮）
-│   │   │   ├── MessageBubble.tsx    # 消息气泡（含编辑/删除）
-│   │   │   ├── MessageList.tsx      # 消息列表
-│   │   │   ├── ModelSelector.tsx    # 模型选择器
-│   │   │   ├── FileAttachment.tsx   # 文件附件
-│   │   │   └── AgentConfigButton.tsx # 智能体配置
-│   │   ├── compare/              # 对比模式组件
-│   │   │   ├── CompareContainer.tsx # 对比容器
-│   │   │   └── ComparePanel.tsx     # 对比面板
-│   │   ├── settings/             # 设置组件
-│   │   │   ├── SettingsModal.tsx    # 设置弹窗
-│   │   │   ├── ModelConfigForm.tsx  # 模型配置表单
-│   │   │   └── SystemPromptEditor.tsx # 系统提示词编辑器
-│   │   ├── share/                # 分享功能组件
-│   │   │   ├── ShareModal.tsx      # 分享弹窗
-│   │   │   └── ShareView.tsx      # 分享页面视图
-│   │   └── common/               # 通用组件
+├── src/                          # Frontend source code
+│   ├── components/               # React components
+│   │   ├── chat/                 # Chat components
+│   │   │   ├── ChatContainer.tsx    # Chat container (includes cancel generation logic)
+│   │   │   ├── ChatInput.tsx        # Input component (includes stop button)
+│   │   │   ├── MessageBubble.tsx    # Message bubble (edit/delete)
+│   │   │   ├── MessageList.tsx     # Message list
+│   │   │   ├── ModelSelector.tsx    # Model selector
+│   │   │   ├── FileAttachment.tsx   # File attachment
+│   │   │   └── AgentConfigButton.tsx # Agent configuration
+│   │   ├── compare/              # Comparison mode components
+│   │   │   ├── CompareContainer.tsx # Comparison container
+│   │   │   └── ComparePanel.tsx     # Comparison panel
+│   │   ├── settings/             # Settings components
+│   │   │   ├── SettingsModal.tsx    # Settings modal
+│   │   │   ├── ModelConfigForm.tsx  # Model config form
+│   │   │   └── SystemPromptEditor.tsx # System prompt editor
+│   │   ├── share/                # Share feature components
+│   │   │   ├── ShareModal.tsx      # Share modal
+│   │   │   └── ShareView.tsx      # Share view
+│   │   └── common/               # Common components
 │   │       ├── Button.tsx
 │   │       ├── Modal.tsx
 │   │       ├── Toast.tsx
 │   │       └── Loading.tsx
-│   ├── stores/                   # 状态管理
-│   │   ├── chatStore.ts          # 对话状态
-│   │   ├── modelStore.ts         # 模型状态（含同步逻辑）
-│   │   └── settingsStore.ts      # 设置状态
-│   ├── services/                 # API 服务
-│   │   ├── api.ts                # 后端 API 服务
-│   │   ├── streaming.ts          # 流式生成管理
-│   │   └── openai.ts             # OpenAI API 封装
-│   ├── types/                    # TypeScript 类型
-│   │   ├── chat.ts               # 对话相关类型
-│   │   ├── model.ts              # 模型相关类型
-│   │   └── index.ts              # 类型导出
-│   ├── utils/                    # 工具函数
-│   │   ├── helpers.ts            # 通用工具
-│   │   └── storage.ts            # 本地存储工具
-│   ├── styles/                   # 样式文件
+│   ├── stores/                   # State management
+│   │   ├── chatStore.ts          # Chat state
+│   │   ├── modelStore.ts         # Model state (includes sync logic)
+│   │   └── settingsStore.ts      # Settings state
+│   ├── services/                 # API services
+│   │   ├── api.ts                # Backend API service
+│   │   ├── streaming.ts           # Streaming generation management
+│   │   └── openai.ts             # OpenAI API wrapper
+│   ├── types/                    # TypeScript types
+│   │   ├── chat.ts               # Chat-related types
+│   │   ├── model.ts              # Model-related types
+│   │   └── index.ts              # Type exports
+│   ├── utils/                    # Utility functions
+│   │   ├── helpers.ts            # Common utilities
+│   │   └── storage.ts            # Local storage utilities
+│   ├── styles/                   # Style files
 │   │   └── index.css
-│   ├── App.tsx                   # 应用根组件
-│   ├── main.tsx                  # 应用入口
-│   └── electron.d.ts             # Electron 类型定义
-├── electron/                     # Electron 桌面应用
-│   ├── main.cjs                  # 主进程
-│   └── preload.cjs               # 预加载脚本
-├── config/                       # 配置文件目录（gitignored）
-│   └── models.json               # 模型配置文件
-├── docs/                         # 文档目录
-│   └── database.md               # PostgreSQL 数据库使用指南
-├── server.cjs                    # Express 后端服务
-├── docker-compose.yml            # PostgreSQL Docker 配置
-├── init.sql                      # 数据库初始化脚本
-├── .env.example                  # 环境变量示例
-├── package.json                  # 项目配置
-├── vite.config.ts                # Vite 配置
-├── tailwind.config.js            # TailwindCSS 配置
-├── tsconfig.json                 # TypeScript 配置
-└── README.md                     # 项目说明
+│   ├── App.tsx                   # App root component
+│   ├── main.tsx                  # App entry
+│   └── electron.d.ts             # Electron type definitions
+├── electron/                      # Electron desktop app
+│   ├── main.cjs                  # Main process
+│   └── preload.cjs               # Preload script
+├── config/                       # Config directory (gitignored)
+│   └── models.json               # Model config file
+├── docs/                         # Documentation
+│   └── database.md               # PostgreSQL database guide
+├── server.cjs                    # Express backend service
+├── # PostgreSQL Docker docker-compose.yml            config
+├── init.sql                      # Database init script
+├── .env.example                  # Environment variables example
+├── package.json                  # Project config
+├── vite.config.ts                # Vite config
+├── tailwind.config.js            # TailwindCSS config
+├── tsconfig.json                 # TypeScript config
+└── README.md                     # Project readme
 ```
 
-## 数据持久化
+## Data Persistence
 
-### 数据库存储
+### Database Storage
 
-本项目使用 **PostgreSQL** 数据库存储对话历史和模型配置，实现多端数据同步。
+This project uses **PostgreSQL** database to store conversation history and model configurations, enabling multi-end data sync.
 
-- 详细使用方法请查看 [PostgreSQL 数据库使用指南](docs/database.md)
-- 数据库管理命令：
-  - `npm run db:start` - 启动数据库
-  - `npm run db:stop` - 停止数据库
-  - `npm run db:reset` - 重置数据库
+- See [PostgreSQL Database Guide](docs/database.md) for detailed usage
+- Database management commands:
+  - `npm run db:start` - Start database
+  - `npm run db:stop` - Stop database
+  - `npm run db:reset` - Reset database
 
-### 数据同步机制
+### Data Sync Mechanism
 
-项目采用三层数据存储策略：
+The project uses a three-layer data storage strategy:
 
-1. **PostgreSQL 数据库**（优先级最高）
-   - 后端服务连接成功后使用
-   - 支持多端数据实时同步
-   - 数据持久化存储
+1. **PostgreSQL Database** (Highest Priority)
+   - Used when backend service connects successfully
+   - Supports real-time multi-end data sync
+   - Persistent data storage
 
-2. **本地文件存储**（备用）
-   - 当数据库不可用时自动降级
-   - 配置文件位置：`config/models.json`
+2. **Local File Storage** (Backup)
+   - Automatically falls back when database is unavailable
+   - Config file location: `config/models.json`
 
-3. **浏览器 localStorage**（降级）
-   - 当后端服务不可用时使用
-   - 仅本地临时存储
+3. **Browser localStorage** (Fallback)
+   - Used when backend service is unavailable
+   - Local temporary storage only
 
-## 注意事项
+## Notes
 
-1. **API Key 安全**：API Key 存储在本地配置文件中，仅经过简单的 XOR 加密。请勿在公共电脑上使用，也不要分享包含 API Key 的配置文件。
+1. **API Key Security**: API keys are stored in local config files with simple XOR encryption only. Do not use on public computers or share config files containing API keys.
 
-2. **CORS 限制**：由于浏览器安全限制，部分 API 可能需要配置 CORS 代理。
+2. **CORS Restrictions**: Due to browser security restrictions, some APIs may require CORS proxy configuration.
 
-3. **流式响应**：流式响应使用 Server-Sent Events (SSE) 实现，需要 API 提供商支持。
+3. **Streaming Responses**: Streaming responses use Server-Sent Events (SSE), requiring API provider support.
 
-4. **端口占用**：
-   - 后端服务默认使用 3001 端口
-   - 前端开发服务器默认使用 5186 端口
-   - 如端口被占用，请关闭占用程序或修改配置
+4. **Port Usage**:
+   - Backend service defaults to port 3001
+   - Frontend dev server defaults to port 5186
+   - If ports are occupied, close the occupying program or modify the config
 
-## 许可证
+## License
 
 MIT
