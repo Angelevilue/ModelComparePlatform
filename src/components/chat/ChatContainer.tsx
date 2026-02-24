@@ -144,9 +144,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
       // 添加用户消息
       addMessage(conversationId, {
         role: 'user',
-        content: tool === 'web_search'
-          ? `搜索: ${toolArgs?.query || content}`
-          : `识图: ${toolArgs?.prompt || content}`,
+        content: content,
       });
 
       try {
@@ -189,13 +187,13 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
         // 添加系统提示
         messages.unshift({
           role: 'system' as const,
-          content: '你是一个智能助手。请根据提供的工具搜索结果或图片理解结果来回答用户的问题。'
+          content: '你是一个智能助手。回答问题时直接给出答案，不要以"根据搜索结果"、"根据提供的搜索结果"或"根据以上信息"等开头。直接陈述答案即可。'
         });
 
         // 添加用户的问题和工具结果
         messages.push({
           role: 'user' as const,
-          content: `用户的问题: ${content}\n\n工具返回的结果:\n${toolResult}\n\n请根据以上工具结果回答用户的问题。`
+          content: `用户的问题: ${content}\n\n工具返回的结果:\n${toolResult}`
         });
 
         // 创建助手消息，用于流式输出，并携带工具调用信息
