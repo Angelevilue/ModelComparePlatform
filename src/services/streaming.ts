@@ -51,7 +51,7 @@ export class StreamingManager {
         const stream = createChatCompletionStream(modelConfig, currentMessages as any, tools);
         let fullContent = '';
         let toolCalls: { index?: number; id: string | null; type: string | null; function: { name: string; arguments: string } }[] = [];
-        
+
         for await (const chunk of stream) {
           if (this.isCancelled.has(key)) {
             return;
@@ -59,19 +59,25 @@ export class StreamingManager {
 
           if (chunk.type === 'content' && chunk.content) {
             fullContent += chunk.content;
-            handler.onToken(chunk.content);
+            // 只有在没有工具调用时才实时输出内容
+            // 如果同时有工具调用，先不输出中间内容，等待工具调用完成后再显示最终答案
+            if (toolCalls.length === 0) {
+              handler.onToken(chunk.content);
+            }
           } else if (chunk.type === 'tool_calls' && chunk.tool_calls) {
             console.log('[Stream] Tool calls received:', chunk.tool_calls);
             toolCalls = chunk.tool_calls;
           }
         }
 
-        console.log('[Stream] Final tool calls:', toolCalls.length);
+        console.log('[Stream] Final tool calls:', toolCalls.length, 'fullContent length:', fullContent.length);
 
         // 检查是否有工具调用
         if (toolCalls.length > 0 && !this.isCancelled.has(key)) {
           hasToolCalls = true;
           maxToolCalls--;
+          // 如果有工具调用，清空之前的中间内容，不显示给用户
+          fullContent = '';
 
           // 将助手的工具调用添加到消息历史
           // 注意：当有 tool_calls 时，content 应该为空或 null
