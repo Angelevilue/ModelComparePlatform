@@ -74,6 +74,19 @@ npm run dev:all
 ```
 这会同时启动后端API服务(3001端口)和前端开发服务器(5186端口)
 
+### MCP 模式（支持工具调用）
+```bash
+npm run mcp:start
+```
+同时启动 MCP 代理、后端 API 服务和前端开发服务器。
+
+**什么是 MCP？**
+MCP（Model Context Protocol，模型上下文协议）让 AI 模型能够使用外部工具：
+- **网络搜索**：模型可以自主搜索互联网获取实时信息
+- **图像理解**：上传或粘贴图片，让 AI 分析图片内容
+
+启用 MCP 后，在聊天输入框中选择搜索工具即可开启智能搜索模式。
+
 ### Electron 桌面开发模式
 ```bash
 npm run electron:dev

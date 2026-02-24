@@ -74,6 +74,19 @@ npm run dev:all
 ```
 This starts both the backend API service (port 3001) and frontend dev server (port 5186)
 
+### MCP Mode (With Tool Calling)
+```bash
+npm run mcp:start
+```
+This starts the MCP proxy, backend API service, and frontend dev server simultaneously.
+
+**What is MCP?**
+MCP (Model Context Protocol) enables AI models to use external tools:
+- **Web Search**: Model can autonomously search the internet for real-time information
+- **Image Understanding**: Upload or paste images for AI to analyze
+
+When MCP is enabled, select the search tool in the chat input to enable intelligent search mode.
+
 ### Electron Desktop Development Mode
 ```bash
 npm run electron:dev
