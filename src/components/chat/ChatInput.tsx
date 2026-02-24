@@ -35,7 +35,6 @@ export function ChatInput({
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [selectedTool, setSelectedTool] = useState<MCPTool>(null);
-  const [imageUrl, setImageUrl] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { enterToSend } = useSettingsStore();
   const [isFocused, setIsFocused] = useState(false);
@@ -67,27 +66,37 @@ export function ChatInput({
   }, [input]);
 
   const handleSend = useCallback(() => {
-    console.log('[ChatInput] selectedTool:', selectedTool, 'input:', input.trim());
-    if ((!input.trim() && attachments.length === 0 && !selectedTool) || isLoading || disabled) return;
-    
+    console.log('[ChatInput] selectedTool:', selectedTool, 'input:', input.trim(), 'attachments:', attachments.length);
+
+    // 检查是否有图片附件
+    const imageAttachments = attachments.filter(a => a.type.startsWith('image/'));
+    const hasImageAttachment = imageAttachments.length > 0;
+
+    // 确定使用哪个工具：如果有图片附件，自动使用 understand_image
+    const toolToUse: MCPTool = hasImageAttachment ? 'understand_image' : selectedTool;
+
+    if ((!input.trim() && attachments.length === 0 && !toolToUse) || isLoading || disabled) return;
+
     const toolArgs: Record<string, string> = {};
-    if (selectedTool === 'web_search') {
+    if (toolToUse === 'web_search') {
       toolArgs.query = input.trim();
-    } else if (selectedTool === 'understand_image') {
-      toolArgs.image_source = imageUrl || input.trim();
+    } else if (toolToUse === 'understand_image') {
+      // 使用图片附件的 base64 内容
+      toolArgs.image_source = hasImageAttachment
+        ? (imageAttachments[0].content || imageAttachments[0].url || '')
+        : '';
     }
-    
-    console.log('[ChatInput] Calling onSend, tool:', selectedTool);
-    onSend(input.trim(), attachments, selectedTool, toolArgs);
+
+    console.log('[ChatInput] Calling onSend, tool:', toolToUse, 'hasImageAttachment:', hasImageAttachment);
+    onSend(input.trim(), attachments, toolToUse, toolArgs);
     setInput('');
     setAttachments([]);
     // 不重置 selectedTool，让用户保持工具选择状态
-    setImageUrl('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
     }
-  }, [input, attachments, isLoading, disabled, onSend, selectedTool, imageUrl]);
+  }, [input, attachments, isLoading, disabled, onSend, selectedTool]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -116,6 +125,67 @@ export function ChatInput({
 
   const charCount = input.length;
   const isOverLimit = charCount > 4000;
+
+  // 监听粘贴事件，支持粘贴图片
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (disabled || isLoading) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          // 检查数量限制
+          if (attachments.length >= 5) {
+            alert('最多只能上传 5 个文件');
+            return;
+          }
+
+          // 检查文件大小（最大 5MB）
+          if (file.size > 5 * 1024 * 1024) {
+            alert('图片超过 5MB 限制');
+            return;
+          }
+
+          // 读取图片内容为 base64
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            const newAttachment: Attachment = {
+              id: `paste-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: file.name || `screenshot-${Date.now()}.png`,
+              size: file.size,
+              type: file.type || 'image/png',
+              content: base64,
+              url: base64, // 图片预览 URL
+            };
+            // 使用函数式更新确保获取最新的 attachments
+            setAttachments(prev => [...prev, newAttachment]);
+          };
+          reader.readAsDataURL(file);
+
+          return; // 只处理第一张图片
+        }
+      }
+    };
+
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.addEventListener('paste', handlePaste);
+    }
+
+    return () => {
+      if (textarea) {
+        textarea.removeEventListener('paste', handlePaste);
+      }
+    };
+  }, [disabled, isLoading, attachments]);
 
   return (
     <div
@@ -198,7 +268,7 @@ export function ChatInput({
       {/* 底部工具栏 */}
       <div className="flex items-center justify-between px-3 py-2">
         {/* 左侧：功能按钮 + 快捷键提示 */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0 flex-nowrap">
           {/* 文件上传按钮（当没有附件时显示） */}
           {attachments.length === 0 && (
             <FileAttachment
@@ -207,10 +277,10 @@ export function ChatInput({
               disabled={disabled || isLoading}
             />
           )}
-          
+
           {/* 子代理配置按钮 */}
           {onSelectAgent && (
-            <AgentConfigButton 
+            <AgentConfigButton
               onSelectAgent={handleSelectAgent}
               disabled={disabled || isLoading}
             />
@@ -223,12 +293,12 @@ export function ChatInput({
               <span>{selectedTool === 'web_search' ? '搜索中...' : selectedTool === 'understand_image' ? '识别中...' : '处理中...'}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-nowrap">
               <button
                 type="button"
                 onClick={() => setSelectedTool(selectedTool === 'web_search' ? null : 'web_search')}
                 className={cn(
-                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors',
+                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors whitespace-nowrap',
                   selectedTool === 'web_search'
                     ? 'bg-blue-100 text-blue-700 border border-blue-300'
                     : 'text-gray-500 hover:bg-gray-100 border border-transparent'
@@ -243,7 +313,7 @@ export function ChatInput({
                 type="button"
                 onClick={() => setSelectedTool(selectedTool === 'understand_image' ? null : 'understand_image')}
                 className={cn(
-                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors',
+                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors whitespace-nowrap',
                   selectedTool === 'understand_image'
                     ? 'bg-purple-100 text-purple-700 border border-purple-300'
                     : 'text-gray-500 hover:bg-gray-100 border border-transparent'
@@ -257,18 +327,8 @@ export function ChatInput({
             </div>
           )}
 
-          {selectedTool === 'understand_image' && !isLoading && !isToolLoading && (
-            <input
-              type="text"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="输入图片URL或拖拽图片"
-              className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 w-32"
-            />
-          )}
-
           <div className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
-          
+
           {/* 快捷键提示 */}
           <div className="hidden sm:flex items-center gap-3 text-xs text-gray-400 flex-shrink-0">
             <span className="flex items-center gap-1">

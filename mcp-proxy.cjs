@@ -6,7 +6,7 @@ const app = express();
 const PORT = process.env.MCP_PROXY_PORT || 3002;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 let mcpProcess = null;
 let mcpReady = false;

@@ -178,9 +178,9 @@ export function FileAttachment({
 
     for (const file of Array.from(files)) {
       try {
-        // 检查文件大小（最大 10MB）
-        if (file.size > 10 * 1024 * 1024) {
-          alert(`文件 "${file.name}" 超过 10MB 限制`);
+        // 检查文件大小（最大 5MB）
+        if (file.size > 5 * 1024 * 1024) {
+          alert(`文件 "${file.name}" 超过 5MB 限制`);
           continue;
         }
 
@@ -271,7 +271,7 @@ export function FileAttachment({
           ) : (
             <Upload className="w-3.5 h-3.5" />
           )}
-          <span className="hidden sm:inline">上传</span>
+          <span className="whitespace-nowrap">上传</span>
           {attachments.length > 0 && (
             <span className="ml-0.5 text-[10px] text-gray-400">
               {attachments.length}/{maxFiles}

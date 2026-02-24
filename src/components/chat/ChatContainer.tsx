@@ -44,14 +44,35 @@ function formatSearchResult(result: any): string {
 // 格式化图片理解结果
 function formatImageResult(result: any): string {
   try {
-    if (result && result[0]?.isError) {
-      return `图片识别出错: ${result[0].text}`;
+    console.log('[formatImageResult] raw result:', JSON.stringify(result).substring(0, 500));
+
+    // 处理数组格式: [{ content: [{ type: 'text', text: '...' }], ... }]
+    if (Array.isArray(result) && result[0]?.content) {
+      const textContent = result[0].content[0]?.text;
+      if (textContent) {
+        return textContent;
+      }
     }
-    
-    const data = result?.[0]?.content?.[0]?.text || result;
-    if (typeof data) {
-      return String(data);
+
+    // 处理对象格式: { content: [{ type: 'text', text: '...' }], ... }
+    if (result?.content) {
+      const textContent = result.content[0]?.text;
+      if (textContent) {
+        return textContent;
+      }
     }
+
+    // 处理错误
+    if (result?.isError || result?.[0]?.isError) {
+      return `图片识别出错: ${result?.text || result?.[0]?.text || '未知错误'}`;
+    }
+
+    // 如果是字符串，直接返回
+    if (typeof result === 'string') {
+      return result;
+    }
+
+    // 最后尝试 JSON 序列化
     return JSON.stringify(result, null, 2);
   } catch (e) {
     return `图片识别结果解析失败: ${e instanceof Error ? e.message : '未知错误'}`;

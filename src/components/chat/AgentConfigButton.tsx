@@ -468,7 +468,7 @@ export function AgentConfigButton({ onSelectAgent, disabled = false }: AgentConf
           title="选择子代理"
         >
           <Bot className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">代理</span>
+          <span className="whitespace-nowrap">代理</span>
           <ChevronDown className={cn('w-3 h-3 transition-transform', isOpen && 'rotate-180')} />
         </button>
       </div>
