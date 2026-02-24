@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, X, CornerDownLeft, Command, Bot, Paperclip, Square } from 'lucide-react';
+import { Send, X, CornerDownLeft, Command, Bot, Paperclip, Square, Globe, Image, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { FileAttachment, Attachment } from './FileAttachment';
 import { AgentConfigButton } from './AgentConfigButton';
 
+type MCPTool = 'web_search' | 'understand_image' | null;
+
 interface ChatInputProps {
-  onSend: (message: string, attachments: Attachment[]) => void;
+  onSend: (message: string, attachments: Attachment[], tool?: MCPTool, toolArgs?: Record<string, string>) => void;
   onCancel?: () => void;
   isLoading?: boolean;
+  isToolLoading?: boolean;
   placeholder?: string;
   disabled?: boolean;
   modelName?: string;
@@ -21,6 +24,7 @@ export function ChatInput({
   onSend,
   onCancel,
   isLoading = false,
+  isToolLoading = false,
   placeholder = '输入消息...',
   disabled = false,
   modelName,
@@ -30,6 +34,8 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [selectedTool, setSelectedTool] = useState<MCPTool>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { enterToSend } = useSettingsStore();
   const [isFocused, setIsFocused] = useState(false);
@@ -61,15 +67,27 @@ export function ChatInput({
   }, [input]);
 
   const handleSend = useCallback(() => {
-    if ((!input.trim() && attachments.length === 0) || isLoading || disabled) return;
-    onSend(input.trim(), attachments);
+    console.log('[ChatInput] selectedTool:', selectedTool, 'input:', input.trim());
+    if ((!input.trim() && attachments.length === 0 && !selectedTool) || isLoading || disabled) return;
+    
+    const toolArgs: Record<string, string> = {};
+    if (selectedTool === 'web_search') {
+      toolArgs.query = input.trim();
+    } else if (selectedTool === 'understand_image') {
+      toolArgs.image_source = imageUrl || input.trim();
+    }
+    
+    console.log('[ChatInput] Calling onSend, tool:', selectedTool);
+    onSend(input.trim(), attachments, selectedTool, toolArgs);
     setInput('');
     setAttachments([]);
+    // 不重置 selectedTool，让用户保持工具选择状态
+    setImageUrl('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.focus();
     }
-  }, [input, attachments, isLoading, disabled, onSend]);
+  }, [input, attachments, isLoading, disabled, onSend, selectedTool, imageUrl]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -198,6 +216,57 @@ export function ChatInput({
             />
           )}
 
+          {/* MCP 工具选择器 */}
+          {(isLoading || isToolLoading) ? (
+            <div className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 bg-gray-50 rounded-lg">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>{selectedTool === 'web_search' ? '搜索中...' : selectedTool === 'understand_image' ? '识别中...' : '处理中...'}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setSelectedTool(selectedTool === 'web_search' ? null : 'web_search')}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors',
+                  selectedTool === 'web_search'
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                    : 'text-gray-500 hover:bg-gray-100 border border-transparent'
+                )}
+                disabled={disabled || isLoading}
+                title="网络搜索"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>搜索</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTool(selectedTool === 'understand_image' ? null : 'understand_image')}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-1 text-xs rounded-lg transition-colors',
+                  selectedTool === 'understand_image'
+                    ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                    : 'text-gray-500 hover:bg-gray-100 border border-transparent'
+                )}
+                disabled={disabled || isLoading}
+                title="图片理解"
+              >
+                <Image className="w-3.5 h-3.5" />
+                <span>识图</span>
+              </button>
+            </div>
+          )}
+
+          {selectedTool === 'understand_image' && !isLoading && !isToolLoading && (
+            <input
+              type="text"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="输入图片URL或拖拽图片"
+              className="px-2 py-1 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 w-32"
+            />
+          )}
+
           <div className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
           
           {/* 快捷键提示 */}
@@ -250,10 +319,10 @@ export function ChatInput({
           ) : (
             <button
               onClick={handleSend}
-              disabled={(!input.trim() && attachments.length === 0) || isLoading || disabled || isOverLimit}
+              disabled={(!input.trim() && attachments.length === 0 && !selectedTool) || isLoading || disabled || isOverLimit}
               className={cn(
                 'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                (input.trim() || attachments.length > 0) && !isLoading && !disabled && !isOverLimit
+                (input.trim() || attachments.length > 0 || selectedTool) && !isLoading && !disabled && !isOverLimit
                   ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-sm hover:shadow'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               )}

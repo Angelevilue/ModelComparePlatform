@@ -87,6 +87,10 @@ function startMCP() {
     mcpReady = false;
     initialized = false;
     pendingRequests.clear();
+    
+    if (code !== 0) {
+      console.log('MCP process crashed, will restart on next request');
+    }
   });
 
   mcpProcess.on('error', (err) => {
@@ -96,7 +100,7 @@ function startMCP() {
 
 function sendMCPRequest(method, params = {}) {
   return new Promise((resolve, reject) => {
-    if (!mcpProcess) {
+    if (!mcpProcess || !mcpReady) {
       startMCP();
     }
     
@@ -114,6 +118,12 @@ function sendMCPRequest(method, params = {}) {
         reject(new Error('MCP request timeout'));
       }
     }, 60000);
+    
+    if (!mcpProcess || !mcpProcess.stdin) {
+      clearTimeout(timeout);
+      reject(new Error('MCP process not available'));
+      return;
+    }
     
     pendingRequests.set(id, {
       resolve: (result) => {
@@ -212,10 +222,10 @@ app.post('/understand_image', async (req, res) => {
       startMCP();
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
-    const { prompt, image_url } = req.body;
+    const { prompt, image_source } = req.body;
     const result = await sendMCPRequest('tools/call', {
       name: 'understand_image',
-      arguments: { prompt, image_url }
+      arguments: { prompt, image_source }
     });
     res.json(result);
   } catch (error) {
@@ -236,4 +246,12 @@ app.listen(PORT, () => {
   console.log(`  GET  /tools - List available tools`);
   console.log(`  POST /web_search - Web search`);
   console.log(`  POST /understand_image - Understand image`);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('MCP Proxy Uncaught Exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('MCP Proxy Unhandled Rejection:', reason);
 });

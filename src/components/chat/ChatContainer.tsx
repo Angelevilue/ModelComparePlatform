@@ -8,9 +8,55 @@ import { ShareModal } from '../share/ShareModal';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/stores/modelStore';
 import { streamingManager, buildMessageHistory } from '@/services/streaming';
+import { apiService } from '@/services/api';
 import type { Attachment } from './FileAttachment';
 
 import { Trash2, Settings, MessageSquarePlus, Share2 } from 'lucide-react';
+
+// 格式化搜索结果
+function formatSearchResult(result: any): string {
+  try {
+    if (result && result[0]?.isError) {
+      return `搜索出错: ${result[0].text}`;
+    }
+    
+    const data = result?.[0]?.content?.[0]?.text || result;
+    if (typeof data === 'string') {
+      try {
+        const parsed = JSON.parse(data);
+        const results = parsed.organic || [];
+        if (results.length === 0) {
+          return '未找到相关搜索结果';
+        }
+        return results.slice(0, 5).map((r: any, i: number) => 
+          `${i + 1}. **${r.title}**\n   ${r.snippet || ''}\n   ${r.link || ''}`
+        ).join('\n\n');
+      } catch {
+        return String(data);
+      }
+    }
+    return JSON.stringify(result, null, 2);
+  } catch (e) {
+    return `搜索结果解析失败: ${e instanceof Error ? e.message : '未知错误'}`;
+  }
+}
+
+// 格式化图片理解结果
+function formatImageResult(result: any): string {
+  try {
+    if (result && result[0]?.isError) {
+      return `图片识别出错: ${result[0].text}`;
+    }
+    
+    const data = result?.[0]?.content?.[0]?.text || result;
+    if (typeof data) {
+      return String(data);
+    }
+    return JSON.stringify(result, null, 2);
+  } catch (e) {
+    return `图片识别结果解析失败: ${e instanceof Error ? e.message : '未知错误'}`;
+  }
+}
 
 interface ChatContainerProps {
   conversationId: string;
@@ -34,6 +80,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
   const [systemPrompt, setSystemPrompt] = useState(conversation?.systemPrompt || '');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isToolLoading, setIsToolLoading] = useState(false);
   const currentMessageIdRef = useRef<string | null>(null);
 
   if (!conversation) {
@@ -61,10 +108,136 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
     }
   }, [conversationId]);
 
-  const handleSend = useCallback(async (content: string, attachments: Attachment[] = []) => {
+  const handleSend = useCallback(async (
+    content: string, 
+    attachments: Attachment[] = [],
+    tool?: 'web_search' | 'understand_image' | null,
+    toolArgs?: Record<string, string>
+  ) => {
     if (!modelConfig || !selectedModelId) return;
 
+    // 如果启用了工具，先调用工具获取结果
+    if (tool) {
+      setIsToolLoading(true);
+      
+      // 添加用户消息
+      addMessage(conversationId, {
+        role: 'user',
+        content: tool === 'web_search' 
+          ? `搜索: ${toolArgs?.query || content}`
+          : `识图: ${toolArgs?.prompt || content}`,
+      });
+
+      // 添加工具调用中的提示消息
+      const toolMessageId = addMessage(conversationId, {
+        role: 'assistant',
+        content: tool === 'web_search' ? '🔍 正在搜索...' : '🖼️ 正在识别图片...',
+        isStreaming: true,
+      });
+
+      try {
+        let toolResult: string;
+        
+        if (tool === 'web_search') {
+          const query = toolArgs?.query || content;
+          const result = await apiService.webSearch(query);
+          toolResult = formatSearchResult(result);
+        } else if (tool === 'understand_image') {
+          const imageUrl = toolArgs?.image_source || '';
+          const prompt = toolArgs?.prompt || '描述这张图片';
+          const result = await apiService.understandImage(prompt, imageUrl);
+          toolResult = formatImageResult(result);
+        } else {
+          toolResult = '未知的工具';
+        }
+
+        // 更新工具消息
+        updateMessage(conversationId, toolMessageId, {
+          content: toolResult,
+          isStreaming: false,
+        });
+
+        // 现在将工具结果发送给模型，让模型基于结果回复
+        const messages = buildMessageHistory(conversation.messages, systemPrompt);
+        
+        // 添加系统提示
+        messages.unshift({
+          role: 'system' as const,
+          content: '你是一个智能助手。请根据提供的工具搜索结果或图片理解结果来回答用户的问题。'
+        });
+
+        // 添加用户的问题和工具结果
+        messages.push({ 
+          role: 'user' as const, 
+          content: `用户的问题: ${content}\n\n工具返回的结果:\n${toolResult}\n\n请根据以上工具结果回答用户的问题。` 
+        });
+
+        // 创建助手消息用于流式输出
+        const assistantMessageId = addMessage(conversationId, {
+          role: 'assistant',
+          content: '',
+          modelId: modelConfig.name,
+          isStreaming: true,
+        });
+
+        currentMessageIdRef.current = assistantMessageId;
+        setIsGenerating(true);
+        setGenerating(true);
+
+        let fullContent = '';
+        
+        await streamingManager.streamGenerate(
+          modelConfig,
+          messages,
+          conversationId,
+          assistantMessageId,
+          {
+            onToken: (token) => {
+              fullContent += token;
+              updateMessage(conversationId, assistantMessageId, {
+                content: fullContent,
+              });
+            },
+            onComplete: () => {
+              updateMessage(conversationId, assistantMessageId, {
+                isStreaming: false,
+              });
+              setIsGenerating(false);
+              setGenerating(false);
+            },
+            onError: (error) => {
+              updateMessage(conversationId, assistantMessageId, {
+                content: `错误: ${error.message}`,
+                isStreaming: false,
+                isError: true,
+              });
+              setIsGenerating(false);
+              setGenerating(false);
+            },
+          },
+          false  // 不需要再次调用工具
+        );
+
+      } catch (error) {
+        updateMessage(conversationId, toolMessageId, {
+          content: `工具调用失败: ${error instanceof Error ? error.message : '未知错误'}`,
+          isStreaming: false,
+          isError: true,
+        });
+      } finally {
+        setIsToolLoading(false);
+      }
+      return;
+    }
+
+    // 普通消息处理 - 启用自动工具调用（让模型决定是否使用工具）
+    // 如果用户明确选择了工具，使用手动模式（上面的逻辑）
+    const enableTools = true; // 默认启用自动工具调用
+    console.log('[ChatContainer] handleSend enableTools:', enableTools, 'tool:', tool);
+    
     let messageContent = content;
+    
+    // 处理附件
     if (attachments.length > 0) {
       const attachmentInfo = attachments.map(att => `[附件: ${att.name}]`).join('\n');
       messageContent = content 
@@ -105,11 +278,27 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
     }
     
     const messages = buildMessageHistory(
-      [...conversation.messages, userMessage],
+      conversation.messages,
       systemPrompt
     );
+    
+    // 如果启用工具，在系统提示中告诉模型可以使用哪些工具
+    if (enableTools) {
+      messages.unshift({
+        role: 'system' as const,
+        content: `你是一个智能助手。你可以使用以下工具来帮助回答用户的问题：
+
+1. web_search - 搜索网络获取最新信息。当用户询问实时信息、新闻、天气、股价等时，请主动使用此工具。
+2. understand_image - 分析图片内容。当用户上传图片并询问图片相关内容时使用。
+
+使用工具的格式是通过返回 tool_calls 来调用工具，而不是在文本中描述你会调用工具。`
+      });
+    }
+    
+    messages.push({ role: 'user' as const, content: userMessage.content });
 
     let fullContent = '';
+    let toolCallsResult: { id: string; name: string; arguments: string; result: string }[] = [];
     
     await streamingManager.streamGenerate(
       modelConfig,
@@ -124,8 +313,10 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           });
         },
         onComplete: () => {
+          // 在完成时才显示工具调用信息
           updateMessage(conversationId, assistantMessageId, {
             isStreaming: false,
+            toolCallsInfo: toolCallsResult.length > 0 ? toolCallsResult : undefined,
           });
           setIsGenerating(false);
           setGenerating(false);
@@ -139,7 +330,20 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           setIsGenerating(false);
           setGenerating(false);
         },
-      }
+        onToolCall: (toolCalls) => {
+          console.log('[ChatContainer] Tool calls executed:', toolCalls);
+          toolCallsResult = toolCalls;
+          
+          // 为每个工具调用添加一条工具消息显示搜索结果
+          for (const tc of toolCalls) {
+            addMessage(conversationId, {
+              role: 'tool',
+              content: tc.result,
+            });
+          }
+        },
+      },
+      enableTools  // 启用工具调用
     );
   }, [conversationId, conversation?.messages, modelConfig, selectedModelId, systemPrompt]);
 
@@ -192,7 +396,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
           setIsGenerating(false);
           setGenerating(false);
         },
-      }
+      },
+      false  // 重新生成时不启用工具
     );
   }, [conversationId, conversation?.messages, modelConfig, systemPrompt]);
 
@@ -283,7 +488,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
             setIsGenerating(false);
             setGenerating(false);
           },
-        }
+        },
+        false  // 编辑时不启用工具
       );
     } else {
       const nextMessage = conversation.messages[nextMessageIndex];
@@ -330,7 +536,8 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
               setIsGenerating(false);
               setGenerating(false);
             },
-          }
+          },
+          false  // 编辑时不启用工具
         );
       }
     }
@@ -406,6 +613,7 @@ export function ChatContainer({ conversationId, onOpenSettings }: ChatContainerP
             onSend={handleSend}
             onCancel={handleCancel}
             isLoading={isGenerating}
+            isToolLoading={isToolLoading}
             placeholder={modelConfig ? '输入消息，或上传文件...' : '请先选择或配置模型'}
             disabled={!modelConfig}
             modelName={modelConfig?.name}

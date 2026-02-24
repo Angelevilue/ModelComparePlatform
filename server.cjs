@@ -302,9 +302,9 @@ app.get('/api/health', (req, res) => {
 
 const http = require('http');
 
-function forwardMCPRequest(method, body = {}) {
+function forwardMCPRequest(method, body = null) {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify(body);
+    const data = body ? JSON.stringify(body) : null;
     const options = {
       hostname: 'localhost',
       port: 3002,
@@ -331,7 +331,7 @@ function forwardMCPRequest(method, body = {}) {
 
     req.on('error', reject);
     
-    if (body) {
+    if (data) {
       req.write(data);
     }
     req.end();
@@ -339,13 +339,22 @@ function forwardMCPRequest(method, body = {}) {
 }
 
 // 初始化 MCP 服务
+let mcpInitInProgress = false;
+
 app.post('/api/mcp/init', async (req, res) => {
+  if (mcpInitInProgress) {
+    return res.json({ success: true, ready: true, message: 'Initialization already in progress' });
+  }
+  
+  mcpInitInProgress = true;
   try {
     const result = await forwardMCPRequest('/init', {});
     res.json(result);
   } catch (error) {
     console.error('MCP init error:', error.message);
     res.status(500).json({ error: 'Failed to initialize MCP: ' + error.message });
+  } finally {
+    mcpInitInProgress = false;
   }
 });
 
@@ -397,8 +406,8 @@ app.post('/api/mcp/web_search', async (req, res) => {
 // 图片理解
 app.post('/api/mcp/understand_image', async (req, res) => {
   try {
-    const { prompt, image_url } = req.body;
-    const result = await forwardMCPRequest('/understand_image', { prompt, image_url });
+    const { prompt, image_source } = req.body;
+    const result = await forwardMCPRequest('/understand_image', { prompt, image_source });
     res.json(result);
   } catch (error) {
     console.error('Understand image error:', error.message);
@@ -408,4 +417,13 @@ app.post('/api/mcp/understand_image', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`API Server running on http://localhost:${PORT}`);
+});
+
+// 防止进程崩溃
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
 });

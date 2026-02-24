@@ -17,7 +17,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "electron:dev": "concurrently -k \"npm run server\" \"npm run dev\" \"wait-on http://localhost:5186 && electron .\"",
+    "electron:dev": "concurrently -k \"npm run mcp:proxy\" \"npm run server\" \"npm run dev\" \"wait-on http://localhost:5186 && electron .\"",
     "electron:build": "npm run build && electron-builder",
     "electron:build:mac": "npm run build && electron-builder --mac",
     "electron:build:win": "npm run build && electron-builder --win"

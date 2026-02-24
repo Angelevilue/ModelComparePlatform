@@ -48,13 +48,37 @@ export interface ModelState {
 export interface ChatCompletionRequest {
   model: string;
   messages: {
-    role: 'system' | 'user' | 'assistant';
-    content: string;
+    role: 'system' | 'user' | 'assistant' | 'tool';
+    content: string | null;
+    tool_calls?: ToolCall[];
+    tool_call_id?: string;
   }[];
   temperature?: number;
   max_tokens?: number;
   top_p?: number;
   stream?: boolean;
+  tools?: Tool[];
+}
+
+// 工具定义
+export interface Tool {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+// 工具调用
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  index?: number;
+  function: {
+    name: string;
+    arguments: string;
+  };
 }
 
 // OpenAI 兼容响应
@@ -63,7 +87,8 @@ export interface ChatCompletionResponse {
   choices: {
     message: {
       role: string;
-      content: string;
+      content: string | null;
+      tool_calls?: ToolCall[];
     };
     finish_reason: string;
   }[];
@@ -76,6 +101,7 @@ export interface ChatCompletionStreamChunk {
     delta: {
       content?: string;
       role?: string;
+      tool_calls?: ToolCall[];
     };
     finish_reason: string | null;
   }[];

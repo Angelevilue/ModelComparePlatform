@@ -95,7 +95,7 @@ export const apiService = {
   },
 
   async understandImage(prompt: string, imageUrl: string) {
-    const response = await axios.post(`${API_BASE}/mcp/understand_image`, { prompt, image_url: imageUrl });
+    const response = await axios.post(`${API_BASE}/mcp/understand_image`, { prompt, image_source: imageUrl });
     return response.data;
   },
 };
