@@ -26,15 +26,25 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const prevGeneratingRef = useRef<boolean>(false);
+  const messageCountRef = useRef<number>(0);
+  const autoScrollRef = useRef<number | null>(null);
 
   // 检测用户是否在手动滚动
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
 
-    const { scrollTop } = scrollRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+
     // 如果 scrollTop > 0，说明用户在向上滚动
     if (scrollTop > 0) {
       setIsUserScrolling(true);
+
+      // 清除自动滚动定时器
+      if (autoScrollRef.current) {
+        clearInterval(autoScrollRef.current);
+        autoScrollRef.current = null;
+      }
 
       // 清除之前的定时器
       if (scrollTimeoutRef.current) {
@@ -45,29 +55,89 @@ export function MessageList({
       scrollTimeoutRef.current = setTimeout(() => {
         setIsUserScrolling(false);
       }, 1500);
+    } else {
+      // 如果滚动到最底部，重置用户滚动状态
+      if (scrollHeight - scrollTop - clientHeight < 50) {
+        setIsUserScrolling(false);
+      }
     }
   }, []);
 
-  // 自动滚动到底部
+  // 滚动到底部
+  const scrollToBottom = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, []);
+
+  // 监听消息数量变化 - 当有新消息时滚动
+  useEffect(() => {
+    const prevCount = messageCountRef.current;
+    const currentCount = messages.length;
+
+    // 如果消息数量增加了，滚动到底部
+    if (currentCount > prevCount) {
+      console.log('[MessageList] 消息数量增加，滚动到底部', prevCount, '->', currentCount);
+
+      // 如果用户正在手动滚动，不自动滚动
+      if (isUserScrolling) {
+        console.log('[MessageList] 用户正在滚动，跳过自动滚动');
+        messageCountRef.current = currentCount;
+        return;
+      }
+
+      // 立即滚动
+      scrollToBottom();
+
+      // 如果正在生成，持续滚动确保新内容可见
+      if (isGenerating) {
+        // 先清除之前的
+        if (autoScrollRef.current) {
+          clearInterval(autoScrollRef.current);
+        }
+        autoScrollRef.current = window.setInterval(() => {
+          // 每次滚动前检查用户是否在滚动
+          if (!isUserScrolling && scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          } else {
+            // 用户滚动了，停止自动滚动
+            if (autoScrollRef.current) {
+              clearInterval(autoScrollRef.current);
+              autoScrollRef.current = null;
+            }
+          }
+        }, 200);
+      }
+    }
+
+    messageCountRef.current = currentCount;
+  }, [messages.length, isGenerating, isUserScrolling, scrollToBottom]);
+
+  // 监听生成状态变化
+  useEffect(() => {
+    // 当开始新生成时（从非生成变为生成）
+    if (isGenerating && !prevGeneratingRef.current) {
+      console.log('[MessageList] 开始生成');
+
+      // 如果用户正在手动滚动，不自动滚动
+      if (isUserScrolling) {
+        return;
+      }
+
+      // 立即滚动
+      scrollToBottom();
+    }
+
+    prevGeneratingRef.current = isGenerating;
+  }, [isGenerating, isUserScrolling, scrollToBottom]);
+
+  // 自动滚动到底部（仅在非生成状态下用于历史消息处理）
   useEffect(() => {
     const scrollContainer = scrollRef.current;
     if (!scrollContainer) return;
 
-    // 如果用户在手动滚动，不自动滚动
-    if (isUserScrolling) {
-      return;
-    }
-
-    // 生成内容时
+    // 生成过程中不自动滚动，避免滚动到错误位置
     if (isGenerating) {
-      const isNearBottom =
-        scrollContainer.scrollHeight -
-          scrollContainer.scrollTop -
-          scrollContainer.clientHeight <
-        100;
-      if (isNearBottom) {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
       return;
     }
 
@@ -81,7 +151,7 @@ export function MessageList({
     if (isNearBottom) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isGenerating, isUserScrolling]);
+  }, [messages, isGenerating]);
 
   // 初始滚动到底部
   useEffect(() => {
